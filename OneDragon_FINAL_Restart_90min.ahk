@@ -151,7 +151,7 @@ CheckOneDragonFailed() {
 
     ; 只要日志里出现这条就触发，格式形如：
     ; [00:38:07.281] [operation.py 677] [ERROR]: 指令[ 一条龙 ] 执行失败 返回状态 失败
-    if InStr(newContent, "指令[ 一条龙 ] 执行失败 返回状态 失败") {
+    if InStr(newContent, "指令[ 一条龙 ] 执行失败") {
         Log("FAILDETECT: failure pattern matched")
         return true
     }
