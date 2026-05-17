@@ -46,7 +46,7 @@ odLogFile := "C:\ZZZ-OD\.log\log.txt"
 
 ; 每隔多久扫描一次 OneDragon 日志检测运行失败（毫秒）
 ; 300000 = 5 分钟 | 60000 = 1 分钟 | 10000 = 10 秒（测试用）
-failCheckInterval := 60000
+failCheckInterval := 300000
 
 ; 每隔多久做一次进程守卫检测（毫秒）：同时检查一条龙和游戏进程是否存活
 ; 600000 = 10 分钟
