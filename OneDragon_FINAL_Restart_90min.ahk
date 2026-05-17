@@ -63,6 +63,7 @@ lastFailCheck    := 0   ; 上次扫描 OneDragon 日志的时间戳
 lastLogLen       := 0   ; 已处理的日志字符长度，避免重复检测旧内容
 lastWatchdog     := 0   ; 上次进程守卫检测的时间戳
 startClickTime   := 0   ; 最近一次点击按钮的时间戳，用于计算宽限期
+manualMode       := false
 
 ; --- Log helper ---
 Log(msg) {
@@ -226,6 +227,9 @@ Log("BOOT: closed-loop started. tol=" . imgTolerance . " interval_ms=" . checkIn
 ; ===== MAIN LOOP =====
 Loop
 {
+    while (manualMode)
+        Sleep, 3000
+
     ok := StartAndClick()
     if (!ok) {
         Sleep, 60000
@@ -237,6 +241,11 @@ Loop
     ; While OneDragon is running, either monitor popup (normal) or ignore during cooldown
     Loop
     {
+        if (manualMode) {
+            Sleep, 3000
+            Continue
+        }
+
         nowTick := A_TickCount
 
         ; ---- 每 10 分钟进程守卫：检查两个进程是否都还活着 ----
@@ -295,3 +304,33 @@ Loop
         Sleep, %checkInterval%
     }
 }
+
+; --- 手动模式热键 ---
+~F10::
+    manualMode := true
+    Log("MANUAL: monitoring paused")
+    SoundBeep, 500, 120
+    SoundBeep, 500, 120
+    Gui, ManualBanner:New, +AlwaysOnTop -Caption +ToolWindow
+    Gui, ManualBanner:Color, CC2200
+    Gui, ManualBanner:Font, s16 bold cWhite, Arial
+    Gui, ManualBanner:Add, Text, x12 y8, 监控已暂停
+    Gui, ManualBanner:Show, NoActivate x10 y10, ManualBanner
+    SetTimer, HideBanner, -2000
+return
+
+~F9::
+    manualMode := false
+    Log("MANUAL: monitoring resumed")
+    SoundBeep, 900, 150
+    Gui, ManualBanner:New, +AlwaysOnTop -Caption +ToolWindow
+    Gui, ManualBanner:Color, 007700
+    Gui, ManualBanner:Font, s16 bold cWhite, Arial
+    Gui, ManualBanner:Add, Text, x12 y8, 监控已恢复
+    Gui, ManualBanner:Show, NoActivate x10 y10, ManualBanner
+    SetTimer, HideBanner, -2000
+return
+
+HideBanner:
+    Gui, ManualBanner:Destroy
+return
