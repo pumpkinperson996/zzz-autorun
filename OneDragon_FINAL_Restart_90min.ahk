@@ -149,15 +149,27 @@ CheckOneDragonFailed() {
     newContent := SubStr(content, lastLogLen + 1)
     lastLogLen := currentLen
 
-    if !InStr(newContent, "指令[ 一条龙 ] 执行失败 返回状态 失败")
-        return false
-    if !InStr(newContent, "暂停运行")
-        return false
-    if !InStr(newContent, "松开所有按键")
-        return false
-    if !InStr(newContent, "停止运行")
-        return false
-    return true
+    ; 模式一：运行失败四连
+    if InStr(newContent, "指令[ 一条龙 ] 执行失败 返回状态 失败") {
+        if InStr(newContent, "暂停运行") {
+            if InStr(newContent, "松开所有按键") {
+                if InStr(newContent, "停止运行") {
+                    Log("FAILDETECT: pattern1 matched (执行失败四连)")
+                    return true
+                }
+            }
+        }
+    }
+
+    ; 模式二：未识别到大世界 + 暂停运行
+    if InStr(newContent, "指令[ 一条龙 ] 执行失败 返回状态 未识别到大世界, 点击左上角") {
+        if InStr(newContent, "暂停运行") {
+            Log("FAILDETECT: pattern2 matched (未识别到大世界)")
+            return true
+        }
+    }
+
+    return false
 }
 
 ; --- Start OneDragon and click the Start button ---
