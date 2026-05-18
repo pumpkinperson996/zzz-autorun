@@ -321,6 +321,14 @@ return
 
 ~F9::
     manualMode := false
+    ; 跳过暂停期间写入的日志，避免把一条龙手动停止产生的"执行失败"误判为新故障
+    if FileExist(odLogFile) {
+        FileEncoding, UTF-8
+        FileRead, _resumeSnap, %odLogFile%
+        FileEncoding, CP0
+        lastLogLen := StrLen(_resumeSnap)
+    }
+    lastFailCheck := A_TickCount   ; 重置失败检测计时，避免恢复时立刻触发
     Log("MANUAL: monitoring resumed")
     SoundBeep, 900, 150
     Gui, ManualBanner:New, +AlwaysOnTop -Caption +ToolWindow
