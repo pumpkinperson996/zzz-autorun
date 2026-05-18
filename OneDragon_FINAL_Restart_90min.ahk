@@ -45,12 +45,16 @@ cooldownSleepChunk := 60000
 odLogFile := "C:\ZZZ-OD\.log\log.txt"
 
 ; 每隔多久扫描一次 OneDragon 日志检测运行失败（毫秒）
-; 300000 = 5 分钟 | 60000 = 1 分钟 | 10000 = 10 秒（测试用）
-failCheckInterval := 300000
+; 300000 = 5 分钟 | 60000 = 1 分钟 | 30000 = 30 秒 | 10000 = 10 秒（测试用）
+failCheckInterval := 30000
 
 ; 每隔多久做一次进程守卫检测（毫秒）：同时检查一条龙和游戏进程是否存活
 ; 600000 = 10 分钟
 watchdogInterval := 600000
+
+; 每隔多久强制重启一条龙（毫秒）：防止长时间运行卡死
+; 3600000 = 1 小时
+periodicRestartInterval := 3600000
 
 ; 启动一条龙后的宽限期（毫秒）：宽限期内不触发进程守卫，避免游戏还没拉起来就误判
 ; 180000 = 3 分钟
@@ -62,6 +66,7 @@ cooldownUntil    := 0
 lastFailCheck    := 0   ; 上次扫描 OneDragon 日志的时间戳
 lastLogLen       := 0   ; 已处理的日志字符长度，避免重复检测旧内容
 lastWatchdog     := 0   ; 上次进程守卫检测的时间戳
+lastPeriodicRestart := 0   ; 上次定时强制重启的时间戳
 startClickTime   := 0   ; 最近一次点击按钮的时间戳，用于计算宽限期
 manualMode       := false
 
@@ -237,6 +242,7 @@ Loop
     }
 
     Log("MONITOR: armed")
+    lastPeriodicRestart := A_TickCount   ; 每次启动后重置 1 小时计时
 
     ; While OneDragon is running, either monitor popup (normal) or ignore during cooldown
     Loop
@@ -257,7 +263,16 @@ Loop
             }
         }
 
-        ; ---- 每 5 分钟扫描 OneDragon 日志，检测运行失败四连 ----
+        ; ---- 每 1 小时强制重启一条龙 ----
+        if (lastPeriodicRestart > 0 && nowTick - lastPeriodicRestart >= periodicRestartInterval) {
+            lastPeriodicRestart := nowTick
+            Log("PERIODIC: 1h elapsed, force restarting OneDragon")
+            CloseGame()
+            CloseOneDragon_Force()
+            Break
+        }
+
+        ; ---- 每 30 秒扫描 OneDragon 日志，检测运行失败 ----
         if (nowTick - lastFailCheck >= failCheckInterval) {
             lastFailCheck := nowTick
             if (CheckOneDragonFailed()) {
