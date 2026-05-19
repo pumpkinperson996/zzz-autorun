@@ -236,7 +236,7 @@ C:\ZZZ-OD\OneDragon_FINAL_Restart_90min.ahk
 | `postLaunchSleep` | `1500` | 一条龙启动后等多久再点按钮（毫秒） |
 | `checkInterval` | `500` | 弹窗扫描间隔（毫秒），500 = 每 0.5 秒 |
 | `imgTolerance` | `90` | 弹窗图片识别容错度，90 已经很宽松 |
-| `restartDelay` | `3600000` | 检测到弹窗后等多久重启（毫秒），默认 1 小时 |
+| `restartDelay` | `7200000` | 检测到弹窗后等多久重启（毫秒），默认 2 小时 |
 | `failCheckInterval` | `30000` | 读取一条龙日志的间隔（毫秒），默认 30 秒 |
 | `periodicRestartInterval` | `3600000` | 定时强制重启间隔（毫秒），默认 1 小时 |
 
