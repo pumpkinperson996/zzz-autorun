@@ -24,22 +24,15 @@ checkInterval := 500
 ; ImageSearch 容错度（0-100）：越大越宽松，90 适合游戏画面有轻微变化的情况
 imgTolerance  := 90
 
-; 检测到弹窗并关闭一条龙后，等待多久再重启（毫秒）
+; 检测到弹窗后，等待多久再重启（毫秒）
 ; 3600000 = 1 小时 | 5400000 = 90 分钟 | 测试用可改成 60000（1 分钟）
 restartDelay  := 3600000
-
-; 检测到弹窗后的冷却时间（毫秒），冷却期内不再检测弹窗，避免弹窗残留导致重启后秒关
-; 5400000 = 90 分钟 | 7200000 = 2 小时
-cooldownMs    := 5400000
 
 ; 启动 Launcher 后等待 Qt 主窗口出现的超时时间（秒）
 startupWaitSec := 60
 
 ; Qt 主窗口出现后，等待多久再点击按钮（毫秒），太短可能界面还没完全加载
 postLaunchSleep := 1500
-
-; 冷却期间每隔多久检查一次冷却是否结束（毫秒），不影响功能，只影响日志频率
-cooldownSleepChunk := 60000
 
 ; 一条龙自身日志路径（用于检测运行失败）
 odLogFile := "C:\ZZZ-OD\.log\log.txt"
@@ -62,7 +55,6 @@ startupGrace := 180000
 ; ===================
 
 ; Track cooldown end time using tick count
-cooldownUntil    := 0
 lastFailCheck    := 0   ; 上次扫描 OneDragon 日志的时间戳
 lastLogLen       := 0   ; 已处理的日志字符长度，避免重复检测旧内容
 lastWatchdog     := 0   ; 上次进程守卫检测的时间戳
@@ -284,17 +276,6 @@ Loop
             }
         }
 
-        ; ---- Cooldown mode: do NOT detect popup ----
-        if (cooldownUntil > nowTick) {
-            remaining := cooldownUntil - nowTick
-            mins := Floor(remaining / 60000)
-            Log("COOLDOWN: popup detection paused, remaining_minutes=" . mins)
-
-            ; During cooldown we just wait in chunks, keeping OneDragon running
-            Sleep, %cooldownSleepChunk%
-            Continue
-        }
-
         ; ---- Normal mode: detect popup ----
         ImageSearch, fx, fy, 0, 0, A_ScreenWidth, A_ScreenHeight, *%imgTolerance% %popupImg%
         if (ErrorLevel = 0)
@@ -302,15 +283,10 @@ Loop
             SoundBeep, 900, 200
             Log("DETECTED: popup at x=" . fx . " y=" . fy)
 
-            ; 1) Close OneDragon immediately
+            ; 关闭游戏和一条龙，等待后直接重启，无需冷却期
+            CloseGame()
             CloseOneDragon_Force()
-
-            ; 2) Start cooldown for 2 hours (ignore popup detection to avoid endless loop)
-            cooldownUntil := A_TickCount + cooldownMs
-            Log("COOLDOWN: started for 2h (ignore popup detections until it expires)")
-
-            ; 3) Wait 90 minutes, then restart (outer loop continues)
-            Log("SLEEP: 90min before restart")
+            Log("SLEEP: waiting before restart")
             Sleep, %restartDelay%
             Log("RESTART: waking up")
             Break
