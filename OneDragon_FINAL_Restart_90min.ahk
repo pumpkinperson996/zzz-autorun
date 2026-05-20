@@ -9,7 +9,6 @@ CoordMode, Pixel, Screen
 launcher := "C:\ZZZ-OD\OneDragon-Launcher.exe"
 workdir  := "C:\ZZZ-OD"
 
-popupImg := "C:\ZZZ-OD\popup_banner.png"   ; 截取的异常弹窗特征图，用 Snipping Tool 截游戏画面局部
 logFile  := "C:\ZZZ-OD\closedloop.log"
 
 ; 「启动一条龙」按钮的 Client 坐标，用 AutoHotkey Window Spy 测量
@@ -18,11 +17,14 @@ logFile  := "C:\ZZZ-OD\closedloop.log"
 btnX := 1470
 btnY := 1055
 
-; 弹窗检测间隔（毫秒）：500 = 每 0.5 秒扫一次屏幕，越小响应越快但 CPU 占用略高
+; 主循环休眠间隔（毫秒），控制各项检测的响应粒度
 checkInterval := 500
 
-; ImageSearch 容错度（0-100）：越大越宽松，90 适合游戏画面有轻微变化的情况
-imgTolerance  := 90
+; OCR 被顶号检测：识别关键词，每隔多久调用一次（毫秒）
+; 5000 = 5 秒，弹窗会持续停留，5 秒足够
+ocrPython   := "C:\ZZZ-OD\.install\python\cpython-3.11.12-windows-x86_64-none\python.exe"
+ocrScript   := "C:\ZZZ-OD\ocrcheck.py"
+ocrInterval := 5000
 
 ; 检测到弹窗后，等待多久再重启（毫秒）
 ; 7200000 = 2 小时 | 3600000 = 1 小时 | 测试用可改成 60000（1 分钟）
@@ -55,6 +57,7 @@ startupGrace := 180000
 ; ===================
 
 ; Track cooldown end time using tick count
+lastOcrCheck     := 0   ; 上次 OCR 检测被顶号弹窗的时间戳
 lastFailCheck    := 0   ; 上次扫描 OneDragon 日志的时间戳
 lastLogLen       := 0   ; 已处理的日志字符长度，避免重复检测旧内容
 lastWatchdog     := 0   ; 上次进程守卫检测的时间戳
@@ -203,11 +206,6 @@ if !FileExist(launcher) {
     Log("ERROR: launcher not found: " . launcher)
     ExitApp
 }
-if !FileExist(popupImg) {
-    Log("ERROR: popupImg not found: " . popupImg)
-    ExitApp
-}
-
 ; 初始化日志位置，跳过脚本启动前已存在的旧日志内容，避免把历史失败记录误判为新事件
 if FileExist(odLogFile) {
     FileEncoding, UTF-8
@@ -219,7 +217,7 @@ if FileExist(odLogFile) {
 ; 禁止系统进入睡眠（ES_CONTINUOUS | ES_SYSTEM_REQUIRED），防止电脑自动睡眠导致监控中断
 DllCall("SetThreadExecutionState", "UInt", 0x80000001)
 
-Log("BOOT: closed-loop started. tol=" . imgTolerance . " interval_ms=" . checkInterval . " cooldown=2h restart=90m")
+Log("BOOT: closed-loop started. ocr_interval=" . ocrInterval . "ms fail_check=" . failCheckInterval . "ms")
 
 ; ===== MAIN LOOP =====
 Loop
@@ -276,20 +274,23 @@ Loop
             }
         }
 
-        ; ---- Normal mode: detect popup ----
-        ImageSearch, fx, fy, 0, 0, A_ScreenWidth, A_ScreenHeight, *%imgTolerance% %popupImg%
-        if (ErrorLevel = 0)
-        {
-            SoundBeep, 900, 200
-            Log("DETECTED: popup at x=" . fx . " y=" . fy)
-
-            ; 关闭游戏和一条龙，等待后直接重启，无需冷却期
-            CloseGame()
-            CloseOneDragon_Force()
-            Log("SLEEP: waiting before restart")
-            Sleep, %restartDelay%
-            Log("RESTART: waking up")
-            Break
+        ; ---- 每 5 秒 OCR 检测被顶号弹窗 ----
+        if (nowTick - lastOcrCheck >= ocrInterval) {
+            lastOcrCheck := nowTick
+            ocrResultFile := A_Temp . "\zzz_ocr_result.txt"
+            RunWait, %ComSpec% /c "%ocrPython%" "%ocrScript%" > "%ocrResultFile%" 2>nul, , Hide
+            FileRead, ocrResult, %ocrResultFile%
+            FileDelete, %ocrResultFile%
+            if (Trim(ocrResult) = "FOUND") {
+                SoundBeep, 900, 200
+                Log("DETECTED: popup text found by OCR")
+                CloseGame()
+                CloseOneDragon_Force()
+                Log("SLEEP: waiting before restart")
+                Sleep, %restartDelay%
+                Log("RESTART: waking up")
+                Break
+            }
         }
 
         Sleep, %checkInterval%
@@ -320,6 +321,7 @@ return
         lastLogLen := StrLen(_resumeSnap)
     }
     lastFailCheck := A_TickCount   ; 重置失败检测计时，避免恢复时立刻触发
+    lastOcrCheck  := A_TickCount   ; 重置 OCR 计时
     Log("MANUAL: monitoring resumed")
     SoundBeep, 900, 150
     Gui, ManualBanner:New, +AlwaysOnTop -Caption +ToolWindow
