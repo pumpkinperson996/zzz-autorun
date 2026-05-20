@@ -9,7 +9,7 @@ CoordMode, Pixel, Screen
 launcher := "C:\ZZZ-OD\OneDragon-Launcher.exe"
 workdir  := "C:\ZZZ-OD"
 
-logFile  := "C:\ZZZ-OD\closedloop.log"
+logFile  := "C:\ZZZ-OD\ZZZ-autorun\logs\closedloop.log"
 
 ; 「启动一条龙」按钮的 Client 坐标，用 AutoHotkey Window Spy 测量
 ; 注意：必须用 Window Spy 里的 Client 坐标，不是 Screen 坐标
@@ -23,7 +23,7 @@ checkInterval := 500
 ; OCR 被顶号检测：识别关键词，每隔多久调用一次（毫秒）
 ; 500 = 0.5 秒
 ocrPython   := "C:\ZZZ-OD\.install\python\cpython-3.11.12-windows-x86_64-none\python.exe"
-ocrScript   := "C:\ZZZ-OD\ocrcheck.py"
+ocrScript   := "C:\ZZZ-OD\ZZZ-autorun\scripts\ocrcheck.py"
 ocrInterval := 500
 
 ; 检测到弹窗后，等待多久再重启（毫秒）

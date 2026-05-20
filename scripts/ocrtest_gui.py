@@ -5,7 +5,7 @@ from tkinter import scrolledtext
 import sys
 
 sys.path.insert(0, r"C:\ZZZ-OD\.install\python\cpython-3.11.12-windows-x86_64-none\Lib\site-packages")
-sys.path.insert(0, r"C:\ZZZ-OD")
+sys.path.insert(0, r"C:\ZZZ-OD\ZZZ-autorun\scripts")
 from ocrcheck import find_game_pid, find_hwnd_by_pid, capture_window, ocr_image, KEYWORD, GAME_EXE
 
 INTERVAL_MS = 1500
