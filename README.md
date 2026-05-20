@@ -376,7 +376,31 @@ $sw.Close(); $fs.Close()
 
 脚本正在等待一条龙窗口出现，可能原因：
 - 一条龙启动较慢，等待片刻
-- 一条龙界面类名发生变化（一条龙更新后偶发），重启脚本重试
+- **一条龙更新后 Qt 版本变化，导致窗口类名改变** → 使用 `ListPythonWindows.ahk` 诊断，见下方说明
+
+---
+
+### 诊断工具：ListPythonWindows.ahk
+
+**用途**：查询一条龙当前使用的 Qt 窗口类名。
+
+**背景**：监控脚本通过窗口类名 `Qt680QWindowIcon` 来识别一条龙的窗口。类名中的数字（`680`）对应 Qt 版本号（Qt 6.8.0）。当一条龙升级并使用新版 Qt 时，类名随之变化（如 Qt 6.9.0 → `Qt690QWindowIcon`），监控脚本将无法找到窗口，导致 `MONITOR: armed` 永远不出现。
+
+**触发时机**：一条龙更新后监控脚本不工作，且日志停留在 `START: running launcher`。
+
+**操作步骤**：
+
+1. 关闭正在运行的一条龙（如有）
+2. 双击 `ListPythonWindows.ahk`，脚本会自动启动一条龙并等待 3 秒
+3. 等待记事本自动打开，查看 `logs\python_windows.txt` 的内容
+4. 找到类似以下的行：
+   ```
+   Class=[Qt690QWindowIcon]
+   ```
+5. 用记事本打开 `OneDragon_FINAL_Restart_90min.ahk`，按 `Ctrl+H` 全局替换：
+   - 查找：`Qt680QWindowIcon`
+   - 替换为：`Qt690QWindowIcon`（填你实际查到的类名）
+6. 保存，重启监控脚本
 
 ### 电脑重启后脚本没有自动启动
 
@@ -400,6 +424,7 @@ C:\ZZZ-OD\ZZZ-autorun\
 ├── 清空日志.bat                         双击删除日志文件
 ├── logs\
 │   └── closedloop.log                  运行日志（自动生成，无需手动创建）
+├── ListPythonWindows.ahk               Qt 窗口类名诊断工具（一条龙更新后使用）
 └── scripts\
     ├── ocrcheck.py                     OCR 被顶号检测逻辑（勿移动）
     └── ocrtest_gui.py                  OCR 测试工具源码（勿移动）
