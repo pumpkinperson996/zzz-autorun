@@ -21,10 +21,10 @@ btnY := 1055
 checkInterval := 500
 
 ; OCR 被顶号检测：识别关键词，每隔多久调用一次（毫秒）
-; 5000 = 5 秒，弹窗会持续停留，5 秒足够
+; 500 = 0.5 秒
 ocrPython   := "C:\ZZZ-OD\.install\python\cpython-3.11.12-windows-x86_64-none\python.exe"
 ocrScript   := "C:\ZZZ-OD\ocrcheck.py"
-ocrInterval := 5000
+ocrInterval := 500
 
 ; 检测到弹窗后，等待多久再重启（毫秒）
 ; 7200000 = 2 小时 | 3600000 = 1 小时 | 测试用可改成 60000（1 分钟）
@@ -58,6 +58,8 @@ startupGrace := 180000
 
 ; Track cooldown end time using tick count
 lastOcrCheck     := 0   ; 上次 OCR 检测被顶号弹窗的时间戳
+lastOcrLog       := 0   ; 上次记录 OCR 心跳日志的时间戳
+prevOcrResult    := ""  ; 上次 OCR 结果，用于检测状态变化
 lastFailCheck    := 0   ; 上次扫描 OneDragon 日志的时间戳
 lastLogLen       := 0   ; 已处理的日志字符长度，避免重复检测旧内容
 lastWatchdog     := 0   ; 上次进程守卫检测的时间戳
@@ -237,12 +239,43 @@ Loop
     ; While OneDragon is running, either monitor popup (normal) or ignore during cooldown
     Loop
     {
+        nowTick := A_TickCount
+
+        ; ---- 每 0.5 秒 OCR 检测被顶号弹窗（manualMode 期间也继续运行）----
+        if (nowTick - lastOcrCheck >= ocrInterval) {
+            lastOcrCheck := nowTick
+            ocrResultFile := A_Temp . "\zzz_ocr_result.txt"
+            RunWait, %ocrPython% "%ocrScript%" "%ocrResultFile%", , Hide
+            FileRead, ocrResult, %ocrResultFile%
+            FileDelete, %ocrResultFile%
+            ocrResult := Trim(ocrResult)
+
+            ; 每 5 分钟心跳 + 状态变化时立即记录
+            if (nowTick - lastOcrLog >= 300000) {
+                lastOcrLog := nowTick
+                Log("OCR: heartbeat result=" . ocrResult)
+            }
+            if (ocrResult != prevOcrResult) {
+                prevOcrResult := ocrResult
+                Log("OCR: state changed -> " . ocrResult)
+            }
+
+            if (ocrResult = "FOUND") {
+                SoundBeep, 900, 200
+                Log("DETECTED: popup text found by OCR")
+                CloseGame()
+                CloseOneDragon_Force()
+                Log("SLEEP: waiting before restart")
+                Sleep, %restartDelay%
+                Log("RESTART: waking up")
+                Break
+            }
+        }
+
         if (manualMode) {
             Sleep, 3000
             Continue
         }
-
-        nowTick := A_TickCount
 
         ; ---- 每 10 分钟进程守卫：检查两个进程是否都还活着 ----
         if (nowTick - lastWatchdog >= watchdogInterval) {
@@ -274,24 +307,6 @@ Loop
             }
         }
 
-        ; ---- 每 5 秒 OCR 检测被顶号弹窗 ----
-        if (nowTick - lastOcrCheck >= ocrInterval) {
-            lastOcrCheck := nowTick
-            ocrResultFile := A_Temp . "\zzz_ocr_result.txt"
-            RunWait, %ComSpec% /c "%ocrPython%" "%ocrScript%" > "%ocrResultFile%" 2>nul, , Hide
-            FileRead, ocrResult, %ocrResultFile%
-            FileDelete, %ocrResultFile%
-            if (Trim(ocrResult) = "FOUND") {
-                SoundBeep, 900, 200
-                Log("DETECTED: popup text found by OCR")
-                CloseGame()
-                CloseOneDragon_Force()
-                Log("SLEEP: waiting before restart")
-                Sleep, %restartDelay%
-                Log("RESTART: waking up")
-                Break
-            }
-        }
 
         Sleep, %checkInterval%
     }

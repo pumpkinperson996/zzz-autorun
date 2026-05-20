@@ -11,17 +11,16 @@
 1. [整体流程是什么](#1-整体流程是什么)
 2. [需要准备什么](#2-需要准备什么)
 3. [安装 AutoHotkey](#3-安装-autohotkey)
-4. [准备弹窗截图](#4-准备弹窗截图)
-5. [配置 Windows 自动登录](#5-配置-windows-自动登录)
-6. [在任务计划程序中添加任务](#6-在任务计划程序中添加任务)
-   - [6A. 每天定时重启电脑](#6a-每天定时重启电脑)
-   - [6B. 登录后自动启动监控脚本](#6b-登录后自动启动监控脚本)
-7. [脚本参数说明](#7-脚本参数说明)
-8. [如何调整参数](#8-如何调整参数)
-9. [如何查看运行日志](#9-如何查看运行日志)
-10. [常见问题排查](#10-常见问题排查)
-11. [测试方法](#11-测试方法)
-12. [手动模式（暂停监控自己玩游戏）](#12-手动模式暂停监控自己玩游戏)
+4. [配置 Windows 自动登录](#4-配置-windows-自动登录)
+5. [在任务计划程序中添加任务](#5-在任务计划程序中添加任务)
+   - [5A. 每天定时重启电脑](#5a-每天定时重启电脑)
+   - [5B. 登录后自动启动监控脚本](#5b-登录后自动启动监控脚本)
+6. [脚本参数说明](#6-脚本参数说明)
+7. [如何调整参数](#7-如何调整参数)
+8. [如何查看运行日志](#8-如何查看运行日志)
+9. [常见问题排查](#9-常见问题排查)
+10. [测试方法](#10-测试方法)
+11. [手动模式（暂停监控自己玩游戏）](#11-手动模式暂停监控自己玩游戏)
 
 ---
 
@@ -41,9 +40,11 @@
   自动点击「启动一条龙 🚀」按钮
        ↓
   ┌──────────────────────────────────────────────────────────┐
-  │  持续监控（三条并行检测线）                                │
+  │  持续监控（四条并行检测线）                                │
   │                                                          │
-  │  ① 每 0.5 秒  扫描屏幕是否出现游戏异常登录弹窗           │
+  │  ① 每 0.5 秒  OCR 识别游戏画面，检测是否出现              │
+  │               「其他地方登录」字样（被顶号弹窗）           │
+  │               F10 暂停期间此检测仍然持续运行               │
   │  ② 每 30 秒   读取一条龙日志，检测是否出现               │
   │               「指令[ 一条龙 ] 执行失败」                 │
   │  ③ 每 10 分钟 检查两个进程是否都还活着（进程守卫）         │
@@ -52,7 +53,7 @@
        ↓ 触发后
   关闭游戏本体 + 关闭一条龙
        ↓
-  ① 触发：关闭游戏和一条龙，等待 1 小时再重启
+  ① 触发：关闭游戏和一条龙，等待 2 小时再重启
      （账号被顶号，等待对方使用完毕后再重新接管）
   ②③④ 触发：立即重启
      （运行出错、进程意外消失或定时刷新，直接重启即可恢复）
@@ -61,6 +62,8 @@
        ↓
   回到「持续监控」状态
 ```
+
+**被顶号检测说明**：脚本使用 Windows 内置 OCR 引擎识别游戏画面中的文字，检测到「其他地方登录」字样即判定为被顶号。不依赖截图文件，不受分辨率变化影响，识别准确率高。
 
 **防睡眠机制**：脚本启动时自动阻止电脑进入睡眠，防止系统自动休眠导致监控中断。
 
@@ -73,7 +76,7 @@
 | 游戏崩溃，一条龙还在 | 关闭两者，重新启动 |
 | 两个进程同时消失 | 立即重启 |
 
-> ⚠️ **监控脚本自身崩溃的情况**：如果 AutoHotkey 脚本本身意外退出，上面所有检测都会停止。建议在任务计划程序中额外添加一个每 15 分钟触发的任务，检查脚本是否在运行，不在则重新启动。具体配置见第 6B 节，触发器改为「按计划 → 每 15 分钟」即可。
+> ⚠️ **监控脚本自身崩溃的情况**：如果 AutoHotkey 脚本本身意外退出，上面所有检测都会停止。建议在任务计划程序中额外添加一个每 15 分钟触发的任务，检查脚本是否在运行，不在则重新启动。具体配置见第 5B 节，触发器改为「按计划 → 每 15 分钟」即可。
 
 ---
 
@@ -81,10 +84,20 @@
 
 | 需要 | 说明 |
 |------|------|
-| Windows 10 电脑 | 需要能自动登录（见第 5 步） |
+| Windows 10 电脑 | 需要能自动登录（见第 4 步） |
 | AutoHotkey v1.1 | 运行 `.ahk` 脚本的程序，免费 |
 | 一条龙主程序 | 已在 `C:\ZZZ-OD\` 目录下 |
-| 弹窗截图 | 游戏异常登录弹窗的截图，见第 4 步 |
+| Python OCR 依赖 | 首次使用需联网安装，见下方说明 |
+
+### 首次安装 Python OCR 依赖
+
+被顶号检测依赖 Windows OCR 引擎，需要安装几个 Python 包。打开 PowerShell 粘贴以下命令回车：
+
+```powershell
+& "C:\ZZZ-OD\.install\python\cpython-3.11.12-windows-x86_64-none\python.exe" -m pip install winrt-runtime "winrt-Windows.Media.Ocr" "winrt-Windows.Graphics.Imaging" "winrt-Windows.Storage.Streams" "winrt-Windows.Security.Cryptography" "winrt-Windows.Foundation" "winrt-Windows.Globalization" "winrt-Windows.Foundation.Collections" mss pywin32 Pillow
+```
+
+安装完成后只需做一次，之后正常运行即可。
 
 ---
 
@@ -99,31 +112,7 @@
 
 ---
 
-## 4. 准备弹窗截图
-
-脚本通过识别屏幕上的图片来检测游戏异常弹窗。你需要提前截取一张弹窗的特征图片，保存到指定位置。
-
-**弹窗长这样**（游戏内提示）：
-> 您的账号在其他地方登录，请检查是否存在账号泄露风险，是否要重新登录游戏？
-
-### 截图步骤
-
-1. 等游戏出现这个弹窗时（或者找一张截图）
-2. 按 `Win + Shift + S` 打开截图工具
-3. 框选弹窗中**最有特征的一小块区域**（比如弹窗标题或提示文字部分），不要截整个屏幕
-4. 截图会自动复制到剪贴板
-5. 打开「画图」程序（搜索栏输入「画图」），按 `Ctrl+V` 粘贴
-6. 另存为，格式选 **PNG**，保存路径填：
-
-```
-C:\ZZZ-OD\popup_banner.png
-```
-
-> **注意**：文件名必须完全一致，包括大小写。
-
----
-
-## 5. 配置 Windows 自动登录
+## 4. 配置 Windows 自动登录
 
 脚本需要在有桌面的情况下运行（鼠标点击、屏幕识别都需要已登录状态）。如果电脑重启后需要手动输密码，就没法全自动了。
 
@@ -140,7 +129,7 @@ C:\ZZZ-OD\popup_banner.png
 
 ---
 
-## 6. 在任务计划程序中添加任务
+## 5. 在任务计划程序中添加任务
 
 任务计划程序是 Windows 内置的定时任务工具，我们用它来触发两件事：每天定时重启电脑，以及登录后自动启动脚本。
 
@@ -150,7 +139,7 @@ C:\ZZZ-OD\popup_banner.png
 
 ---
 
-### 6A. 每天定时重启电脑
+### 5A. 每天定时重启电脑
 
 1. 右侧点「**创建基本任务**」
 2. **名称**填：`Daily Reboot 4AM`，点下一步
@@ -172,7 +161,7 @@ C:\ZZZ-OD\popup_banner.png
 
 ---
 
-### 6B. 登录后自动启动监控脚本
+### 5B. 登录后自动启动监控脚本
 
 1. 右侧点「**创建任务**」（不是「创建基本任务」）
 
@@ -219,7 +208,7 @@ C:\ZZZ-OD\popup_banner.png
 
 ---
 
-## 7. 脚本参数说明
+## 6. 脚本参数说明
 
 脚本文件位于：
 
@@ -234,15 +223,14 @@ C:\ZZZ-OD\OneDragon_FINAL_Restart_90min.ahk
 | `btnX` | `1470` | 「启动一条龙」按钮的横坐标（Client 坐标） |
 | `btnY` | `1055` | 「启动一条龙」按钮的纵坐标（Client 坐标） |
 | `postLaunchSleep` | `1500` | 一条龙启动后等多久再点按钮（毫秒） |
-| `checkInterval` | `500` | 弹窗扫描间隔（毫秒），500 = 每 0.5 秒 |
-| `imgTolerance` | `90` | 弹窗图片识别容错度，90 已经很宽松 |
-| `restartDelay` | `7200000` | 检测到弹窗后等多久重启（毫秒），默认 2 小时 |
+| `ocrInterval` | `500` | OCR 被顶号检测间隔（毫秒），默认 0.5 秒 |
+| `restartDelay` | `7200000` | 检测到被顶号后等多久重启（毫秒），默认 2 小时 |
 | `failCheckInterval` | `30000` | 读取一条龙日志的间隔（毫秒），默认 30 秒 |
 | `periodicRestartInterval` | `3600000` | 定时强制重启间隔（毫秒），默认 1 小时 |
 
 ---
 
-## 8. 如何调整参数
+## 7. 如何调整参数
 
 ### 按钮坐标失效时（一条龙更新后按钮位置可能变化）
 
@@ -272,44 +260,46 @@ C:\ZZZ-OD\OneDragon_FINAL_Restart_90min.ahk
 
 ---
 
-## 9. 如何查看运行日志
+## 8. 如何查看运行日志
 
-脚本运行时会写两个日志文件：
+### 实时查看日志（推荐）
 
-### 脚本自身日志（推荐优先看这个）
+双击 `C:\ZZZ-OD\查看实时日志.bat`，会打开一个窗口实时显示最新日志内容，有新内容自动刷新。
+
+### 脚本自身日志
 
 ```
 C:\ZZZ-OD\closedloop.log
 ```
 
-用记事本打开。正常运行时应该能看到：
+正常运行时应该能看到：
 
 ```
-2026-05-16 06:00:01  BOOT: closed-loop started.
-2026-05-16 06:00:01  START: running launcher
-2026-05-16 06:01:05  START: clicked start button at screen x=1580 y=1120
-2026-05-16 06:01:05  MONITOR: armed
+2026-05-19 06:00:01  BOOT: closed-loop started.
+2026-05-19 06:00:01  START: running launcher
+2026-05-19 06:00:05  START: clicked start button at screen x=2535 y=1535
+2026-05-19 06:00:05  MONITOR: armed
+2026-05-19 06:05:05  OCR: heartbeat result=NOT_FOUND
 ```
 
-检测到异常时：
+检测到被顶号时：
 
 ```
-2026-05-16 08:23:11  FAILDETECT: failure pattern found in OneDragon log
-2026-05-16 08:23:11  FAILDETECT: closing ZenlessZoneZero.exe via taskkill
-2026-05-16 08:23:12  FAILDETECT: taskkill done (exit=0)
-2026-05-16 08:23:12  CLOSE: force killing OneDragon
-2026-05-16 08:23:12  CLOSE: Process.Close pid=11244
-2026-05-16 08:23:12  FAILDETECT: restarting OneDragon
-2026-05-16 09:23:12  START: running launcher        ← 1 小时后重启
+2026-05-19 10:15:33  OCR: state changed -> FOUND
+2026-05-19 10:15:33  DETECTED: popup text found by OCR
+2026-05-19 10:15:33  FAILDETECT: closing ZenlessZoneZero.exe via taskkill
+2026-05-19 10:15:33  CLOSE: force killing OneDragon
+2026-05-19 10:15:33  SLEEP: waiting before restart
+2026-05-19 12:15:33  RESTART: waking up          ← 2 小时后重启
+2026-05-19 12:15:33  START: running launcher
 ```
 
-检测到游戏内异常弹窗时：
+检测到运行失败时：
 
 ```
-2026-05-16 10:15:33  DETECTED: popup at x=1094 y=683
-2026-05-16 10:15:33  CLOSE: force killing OneDragon
-2026-05-16 10:15:33  COOLDOWN: started for 2h
-2026-05-16 10:15:33  SLEEP: 90min before restart
+2026-05-19 08:23:11  FAILDETECT: failure pattern found in OneDragon log
+2026-05-19 08:23:11  FAILDETECT: closing ZenlessZoneZero.exe via taskkill
+2026-05-19 08:23:12  FAILDETECT: restarting OneDragon
 ```
 
 ### 一条龙自身日志
@@ -324,7 +314,7 @@ C:\ZZZ-OD\.log\log.txt
 
 ---
 
-## 10. 常见问题排查
+## 9. 常见问题排查
 
 ### 脚本没有自动启动
 
@@ -340,18 +330,22 @@ C:\ZZZ-OD\.log\log.txt
 2. **按钮坐标偏了**：用 Window Spy 重新测量坐标，更新 `btnX` 和 `btnY`
 3. **一条龙版本更新后按钮位置变化**：同上，重新测坐标
 
-### 游戏异常弹窗没有被检测到
+### 被顶号没有被检测到
 
 可能原因：
-1. **截图不对**：重新截取 `popup_banner.png`，选取特征更明显的区域
-2. **容错度不够**：把 `imgTolerance` 从 `90` 改成 `80`（降低容错，更严格匹配）或 `95`（更宽松）
-3. **截图文件路径不对**：确认文件保存在 `C:\ZZZ-OD\popup_banner.png`
+1. **OCR 中文语言包未安装**：打开 Windows 设置 → 时间和语言 → 语言，确认已安装「中文（简体，中国）」并包含 OCR 支持
+2. **Python OCR 依赖未安装**：重新运行第 2 节的安装命令
+3. **日志里出现 `OCR: state changed -> NO_GAME`**：脚本找不到游戏进程，确认游戏正在运行
+4. **日志里 OCR heartbeat 结果始终为空**：Python 依赖有问题，重新安装
+
+### 被顶号检测到但没有关闭进程
+
+查看日志是否出现 `MONITOR: armed`——如果没有，说明脚本还在启动阶段，OCR 检测还未开始工作。等待 `MONITOR: armed` 出现后再测试。
 
 ### 运行失败检测没有触发
 
 - 确认一条龙日志文件存在：`C:\ZZZ-OD\.log\log.txt`
 - 检查 `closedloop.log` 里是否有 `FAILDETECT` 字样
-- 如果看到 `ERROR: launcher not found` 或 `ERROR: popupImg not found`，说明路径配置有问题
 
 ### 任务计划程序里任务一直显示「正在运行」
 
@@ -359,12 +353,12 @@ C:\ZZZ-OD\.log\log.txt
 
 ### 电脑重启后没有自动登录
 
-- 重新检查第 5 步「配置 Windows 自动登录」
+- 重新检查第 4 步「配置 Windows 自动登录」
 - 确认 `netplwiz` 里已取消勾选密码要求
 
 ---
 
-## 11. 测试方法
+## 10. 测试方法
 
 在正式无人值守运行之前，建议先手动测试各个环节。
 
@@ -373,38 +367,45 @@ C:\ZZZ-OD\.log\log.txt
 1. 确保一条龙已关闭
 2. 双击 `OneDragon_FINAL_Restart_90min.ahk`
 3. 观察：一条龙是否自动启动？按钮是否被点击？
-4. 查看 `C:\ZZZ-OD\closedloop.log` 确认日志正常
+4. 查看 `C:\ZZZ-OD\closedloop.log` 确认出现 `MONITOR: armed`
 
-### 测试二：测试运行失败检测
+### 测试二：测试被顶号 OCR 检测
+
+双击 `C:\ZZZ-OD\OCR测试工具.bat` 打开实时 OCR 检测窗口：
+
+- 窗口每 1.5 秒自动扫描一次游戏画面
+- 正常运行显示 `NOT_FOUND`（黑色）
+- 检测到被顶号弹窗显示 `FOUND`（绿色）
+
+模拟测试方法：打开记事本，输入 `其他地方登录`，字体调大，拖到游戏窗口上方，工具应识别到并显示 `FOUND`。
+
+### 测试三：测试运行失败检测
 
 > 需要先把脚本里 `failCheckInterval` 临时改为 `10000`（10 秒），测试完改回 `30000`。
 
 1. 让脚本运行，等 `closedloop.log` 出现 `MONITOR: armed`
-2. 打开 PowerShell（搜索栏输入 `powershell`），粘贴以下命令并回车：
+2. 打开 PowerShell，粘贴以下命令并回车：
 
 ```powershell
 $fs = [System.IO.FileStream]::new("C:\ZZZ-OD\.log\log.txt", [System.IO.FileMode]::Append, [System.IO.FileAccess]::Write, [System.IO.FileShare]::ReadWrite)
 $sw = [System.IO.StreamWriter]::new($fs, (New-Object System.Text.UTF8Encoding $false))
 $sw.WriteLine("指令[ 一条龙 ] 执行失败 返回状态 失败")
-$sw.WriteLine("暂停运行")
-$sw.WriteLine("松开所有按键")
-$sw.WriteLine("停止运行")
 $sw.Close()
 $fs.Close()
 ```
 
-3. 等约 10 秒，查看 `closedloop.log`
+3. 等约 30 秒，查看 `closedloop.log`
 4. 应看到 `FAILDETECT` 相关日志，一条龙被关闭并重启
 
-### 测试三：测试定时重启任务
+### 测试四：测试定时重启任务
 
 在任务计划程序里右键 `Daily Reboot 4AM` → 「运行」，电脑应立即重启，重启后自动登录并自动运行脚本。
 
 ---
 
-## 12. 手动模式（暂停监控自己玩游戏）
+## 11. 手动模式（暂停监控自己玩游戏）
 
-脚本运行期间，你随时可以切换到手动模式，自己操作游戏，而不会被脚本干扰或触发重启。
+脚本运行期间，你随时可以切换到手动模式，自己操作游戏，不会被脚本触发重启。
 
 ### 热键
 
@@ -417,13 +418,13 @@ $fs.Close()
 
 ### 效果
 
-- 按 `F10` 后：屏幕左上角弹出**红色提示框**「监控已暂停」，2 秒后消失。脚本停止所有监控（弹窗检测、日志扫描、进程守卫），不会触发任何重启。
+- 按 `F10` 后：屏幕左上角弹出**红色提示框**「监控已暂停」，2 秒后消失。脚本暂停日志扫描和进程守卫，**但被顶号 OCR 检测仍然继续运行**——手动游玩期间被顶号依然会自动处理。
 - 按 `F9` 后：屏幕左上角弹出**绿色提示框**「监控已恢复」，2 秒后消失。所有监控恢复正常。
 - 如果忘记按 `F9`，下次电脑重启后脚本自动以监控模式启动，无需手动恢复。
 
-### 注意
+### 重启 AHK 脚本
 
-进程守卫每 10 分钟检测一次，手动模式暂停期间不会触发，不必担心一条龙停止后脚本把游戏也关掉。
+如果需要重启脚本（例如修改参数后），在任务管理器里找到 **AutoHotkey** 进程 → 右键 → 结束任务，然后双击 AHK 脚本重新运行。
 
 ---
 
@@ -432,8 +433,11 @@ $fs.Close()
 | 文件 | 说明 |
 |------|------|
 | `C:\ZZZ-OD\OneDragon_FINAL_Restart_90min.ahk` | 主监控脚本，每天自动运行这个 |
-| `C:\ZZZ-OD\popup_banner.png` | 游戏异常弹窗的截图，用于识别 |
+| `C:\ZZZ-OD\ocrcheck.py` | 被顶号 OCR 检测脚本，由主脚本自动调用 |
+| `C:\ZZZ-OD\ocrtest_gui.py` | OCR 检测测试工具（源码） |
+| `C:\ZZZ-OD\OCR测试工具.bat` | 双击打开 OCR 实时检测窗口 |
+| `C:\ZZZ-OD\查看实时日志.bat` | 双击实时查看运行日志 |
+| `C:\ZZZ-OD\清空日志.bat` | 双击删除日志文件 |
 | `C:\ZZZ-OD\closedloop.log` | 脚本运行日志，出问题先看这里 |
 | `C:\ZZZ-OD\.log\log.txt` | 一条龙自身的运行日志 |
-| `C:\ZZZ-OD\Test_ImageSearch_Only.ahk` | 调试用：单独测试弹窗图片识别 |
 | `C:\ZZZ-OD\ListPythonWindows.ahk` | 调试用：列出所有 Python 窗口信息 |

@@ -94,28 +94,32 @@ async def ocr_image(img: Image.Image) -> str:
     return result.text.replace(" ", "")
 
 
-async def main():
+async def main() -> str:
     pid = find_game_pid(GAME_EXE)
     if not pid:
-        print("NO_GAME")
-        return
+        return "NO_GAME"
 
     hwnd = find_hwnd_by_pid(pid)
     if not hwnd:
-        print("NO_GAME")
-        return
+        return "NO_GAME"
 
     img = capture_window(hwnd)
     if img is None:
-        print("NO_GAME")
-        return
+        return "NO_GAME"
 
     text = await ocr_image(img)
-    if KEYWORD in text:
-        print("FOUND")
-    else:
-        print("NOT_FOUND")
+    return "FOUND" if KEYWORD in text else "NOT_FOUND"
 
 
 if __name__ == "__main__":
-    asyncio.run(main())
+    import sys
+    out_file = sys.argv[1] if len(sys.argv) > 1 else None
+    try:
+        result = asyncio.run(main())
+    except Exception as e:
+        result = f"ERROR: {e}"
+    if out_file:
+        with open(out_file, "w", encoding="utf-8") as f:
+            f.write(result)
+    else:
+        print(result)
