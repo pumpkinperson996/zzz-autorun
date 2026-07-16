@@ -78,7 +78,15 @@ def navigate_to(backend, ctx, goal: str, out_dir: str, max_steps: int = 12) -> d
     steps: list[dict] = []
     last_shot = ''
 
+    from .oracle import Abort, check_abort
+
     for i in range(max_steps):
+        # 每一步之前先过必停检查 —— 执行方无权决定要不要点顶号弹窗
+        try:
+            check_abort(backend)
+        except Abort as e:
+            return {'reached': False, 'steps': steps, 'last_shot': last_shot,
+                    'reason': str(e), 'abort': True}
         last_shot, dump = _dump(backend, ctx, out_dir, f'nav{i:02d}')
 
         prompt = f"""你在驱动《绝区零》的游戏界面导航。harness 已经截图并做了 OCR，你只负责决定下一步点哪。

@@ -14,6 +14,39 @@ import time
 
 _SNAP_ROOT = r'C:\ZZZ-OD\.debug\temp\lost_void_film'
 
+# 见到这些即刻停, 绝不点击、绝不重试(design.md 安全锁 #4 / tasks 4.4)
+# 与 plugins/unattended_guardian 的 kicked_keywords 同源, 但此处独立成表:
+# 两个插件各自独立安装, 不做跨插件 import。
+#
+# 这条锁是补写的 —— 2026-07-15 循环首次真跑时账号被顶号(异地登录), 而循环
+# 代码里一处检查都没有, 执行方顺手把弹窗点掉并重新登录, 会把在别处登录的人顶下线。
+# 设计里这条锁一直在, 只是没实现就把循环放出去跑了。
+ABORT_KEYWORDS = (
+    '其他地方登录', '账号在其他地方', '您的账号在其他', '异地登录', '被迫下线',
+    '服务器连接超时', '是否继续尝试连接', '登录游戏服务器中', '点击进入游戏',
+    '游戏维护', '停机维护', '版本更新',
+)
+
+
+class Abort(RuntimeError):
+    """撞上必须立即停止的界面 —— 不重试, 上报"""
+
+
+def check_abort(backend) -> None:
+    """任何驱动游戏的动作之前都要过这道 —— 撞上就抛, 不给执行方决定的机会
+
+    为什么不交给执行方判断: 它已经证明会在没看懂画面时编造一个按钮去点
+    (实测: 把整段自言自语灌进 target_text, 然后点了顶号弹窗的「确认」)。
+    这类判断必须机械, 和 guard.py 同理。
+    """
+    r = backend.analyze()
+    if not r.success:
+        return
+    txt = ''.join(t.text for t in r.ocr_texts)
+    for kw in ABORT_KEYWORDS:
+        if kw in txt:
+            raise Abort(f'撞上必停界面(关键词「{kw}」) —— 已停止, 不重试。OCR: {txt[:120]}')
+
 
 def _picker_open(backend) -> bool:
     r = backend.analyze()
@@ -39,6 +72,7 @@ def ensure_deploy_screen(backend, ctx, out_dir: str) -> bool:
     """
     from lost_void_film.trial_team_select import PICKER_BACK
 
+    check_abort(backend)
     if _at_deploy(backend):
         return True
     if _picker_open(backend):
@@ -70,8 +104,13 @@ async def sample_success_rate(
     aborted = None
 
     for i in range(n):
-        if not ensure_deploy_screen(backend, ctx, out_dir):
-            aborted = f'第{i + 1}次采样: 无法恢复到出战画面'
+        try:
+            if not ensure_deploy_screen(backend, ctx, out_dir):
+                aborted = f'第{i + 1}次采样: 无法恢复到出战画面'
+                break
+            check_abort(backend)
+        except Abort as e:
+            aborted = f'第{i + 1}次采样前: {e}'
             break
 
         op = ChooseTrialTeamOp(ctx, list(targets))
