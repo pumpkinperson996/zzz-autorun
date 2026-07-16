@@ -82,8 +82,8 @@ def validate_action(act: dict, ocr_items: list) -> str | None:
     target = act.get('target_text', '')
     hits = [t for t in ocr_items if t.text == target]
     if not hits:
-        return (f'target_text 不是 OCR 原文(逐字符相等), 拒绝点击。'
-                f'收到 {target[:60]!r}{"…(共%d字)" % len(target) if len(target) > 60 else ""}')
+        tail = f'…(共{len(target)}字)' if len(target) > 60 else ''
+        return f'target_text 不是 OCR 原文(逐字符相等), 拒绝点击。收到 {target[:60]!r}{tail}'
 
     x, y = int(act.get('x', -1)), int(act.get('y', -1))
     for t in hits:
