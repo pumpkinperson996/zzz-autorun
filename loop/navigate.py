@@ -35,8 +35,8 @@ ACTION_SCHEMA = {
 }
 
 
-def _dump(backend, ctx, out_dir: str, tag: str) -> tuple[str, str]:
-    """截图 + 结构化分析, 返回 (截图路径, 给执行方看的文本 dump)"""
+def _dump(backend, ctx, out_dir: str, tag: str) -> tuple[str, str, list]:
+    """截图 + 结构化分析, 返回 (截图路径, 给执行方看的文本 dump, OCR 条目)"""
     from one_dragon.utils import cv2_utils
 
     ctx.controller.init_game_win()
@@ -48,7 +48,7 @@ def _dump(backend, ctx, out_dir: str, tag: str) -> tuple[str, str]:
 
     r = backend.analyze(screenshot=path)
     if not r.success:
-        return path, f'analyze 失败: {r.error}'
+        return path, f'analyze 失败: {r.error}', []
 
     precise = [s.screen_name for s in r.screens if s.is_precise]
     lines = [
@@ -60,7 +60,38 @@ def _dump(backend, ctx, out_dir: str, tag: str) -> tuple[str, str]:
         cx = int(t.x + t.width / 2)
         cy = int(t.y + t.height / 2)
         lines.append(f'  {t.text!r} @ ({cx}, {cy})')
-    return path, '\n'.join(lines)
+    return path, '\n'.join(lines), list(r.ocr_texts)
+
+
+_CLICK_TOLERANCE = 40
+
+
+def validate_action(act: dict, ocr_items: list) -> str | None:
+    """机械校验执行方的动作。返回拒绝理由, None 表示放行。
+
+    为什么不能只靠提示词: 实测执行方在没看懂画面时会**编造一个按钮去点**。事故当晚它把
+    整段自言自语("The user provided a JSON-like string but it seems incomplete...")灌进
+    target_text, 然后点了顶号弹窗的「确认」。提示词写着"要点的东西必须在可见文本里出现过",
+    它照样点了。
+
+    逐字符相等这一条顺带解决了字段污染: 一段 2000 字的胡话匹配不上任何 OCR 文本。
+    """
+    if act.get('action') != 'click':
+        return None
+
+    target = act.get('target_text', '')
+    hits = [t for t in ocr_items if t.text == target]
+    if not hits:
+        return (f'target_text 不是 OCR 原文(逐字符相等), 拒绝点击。'
+                f'收到 {target[:60]!r}{"…(共%d字)" % len(target) if len(target) > 60 else ""}')
+
+    x, y = int(act.get('x', -1)), int(act.get('y', -1))
+    for t in hits:
+        cx, cy = int(t.x + t.width / 2), int(t.y + t.height / 2)
+        if abs(x - cx) <= _CLICK_TOLERANCE and abs(y - cy) <= _CLICK_TOLERANCE:
+            return None
+    near = [(int(t.x + t.width / 2), int(t.y + t.height / 2)) for t in hits]
+    return f'坐标 ({x},{y}) 与 {target!r} 的实际位置 {near} 相差超过 {_CLICK_TOLERANCE}px, 拒绝点击'
 
 
 def navigate_to(backend, ctx, goal: str, out_dir: str, max_steps: int = 12) -> dict:
@@ -77,6 +108,7 @@ def navigate_to(backend, ctx, goal: str, out_dir: str, max_steps: int = 12) -> d
     os.makedirs(out_dir, exist_ok=True)
     steps: list[dict] = []
     last_shot = ''
+    rejects = 0
 
     from .oracle import Abort, check_abort
 
@@ -87,7 +119,7 @@ def navigate_to(backend, ctx, goal: str, out_dir: str, max_steps: int = 12) -> d
         except Abort as e:
             return {'reached': False, 'steps': steps, 'last_shot': last_shot,
                     'reason': str(e), 'abort': True}
-        last_shot, dump = _dump(backend, ctx, out_dir, f'nav{i:02d}')
+        last_shot, dump, ocr_items = _dump(backend, ctx, out_dir, f'nav{i:02d}')
 
         prompt = f"""你在驱动《绝区零》的游戏界面导航。harness 已经截图并做了 OCR，你只负责决定下一步点哪。
 
@@ -109,9 +141,10 @@ def navigate_to(backend, ctx, goal: str, out_dir: str, max_steps: int = 12) -> d
 {[f"{s['action']} {s.get('target_text', '')}" for s in steps] or '(这是第一步)'}
 """
         act, _ = executor.ask(prompt, ACTION_SCHEMA, max_tokens=4000)
+        act['_step'] = i
         steps.append(act)
-        print(f"  [{i}] {act['action']} {act.get('target_text', '')!r} "
-              f"@({act.get('x')},{act.get('y')}) — {act['why'][:60]}")
+        print(f"  [{i}] {act['action']} {str(act.get('target_text', ''))[:30]!r} "
+              f"@({act.get('x')},{act.get('y')}) — {str(act['why'])[:60]}")
 
         if act['action'] == 'done':
             return {'reached': True, 'steps': steps, 'last_shot': last_shot}
@@ -122,9 +155,21 @@ def navigate_to(backend, ctx, goal: str, out_dir: str, max_steps: int = 12) -> d
             time.sleep(2)
             continue
 
+        # 机械校验 —— 拒绝就不点, 不给它第二次机会乱点同一帧
+        reject = validate_action(act, ocr_items)
+        if reject:
+            print(f'       ✗ 动作被拒: {reject}')
+            act['_rejected'] = reject
+            rejects += 1
+            if rejects >= 3:
+                return {'reached': False, 'steps': steps, 'last_shot': last_shot,
+                        'reason': f'连续被拒 {rejects} 次(执行方在编造点击目标): {reject}'}
+            continue
+
         from one_dragon.base.geometry.point import Point
         ctx.controller.click(Point(int(act['x']), int(act['y'])))
         time.sleep(2)
+        rejects = 0
 
     return {'reached': False, 'steps': steps, 'last_shot': last_shot,
             'reason': f'步数用尽({max_steps}步)'}
