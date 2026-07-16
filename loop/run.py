@@ -121,15 +121,32 @@ async def fix_case(backend, ctx, *, name: str, targets: list[str], rel: str,
     os.makedirs(out, exist_ok=True)
     log: dict = {'case': name, 'targets': targets, 'rounds': []}
 
+    def _digest(stopped: str) -> dict:
+        """无论怎么停都要留下日报 —— spec: 停止 SHALL NOT 静默
+
+        本函数存在的原因: 早先版本在几处提前 return 上直接走人, digest 的写入在
+        函数底部被跳过。实测循环停了却没留下任何记录, 违反 experiment-loop spec
+        「停止 SHALL NOT 静默; SHALL 记录已排除的假设与已获得的观察, 供下次复用」。
+        """
+        log['stopped'] = stopped
+        log.setdefault('final_rate', log.get('baseline', {}).get('rate'))
+        log.setdefault('final_per_agent', log.get('baseline', {}).get('per_agent'))
+        with open(os.path.join(out, 'digest.json'), 'w', encoding='utf-8') as f:
+            json.dump(log, f, ensure_ascii=False, indent=2)
+        print(f'\n{"=" * 62}\n停止原因: {stopped}\n'
+              f'最终成功率: {log["final_rate"]}  {log["final_per_agent"]}\n'
+              f'日报: {out}\\digest.json\n{"=" * 62}')
+        return log
+
     if _git('status', '--porcelain').strip():
-        return {**log, 'stopped': '工作区不干净 —— 拒绝在未提交的改动上跑循环'}
+        return _digest('工作区不干净 —— 拒绝在未提交的改动上跑循环')
 
     print(f'\n{"=" * 62}\n案子: {name}\n目标: {targets}\n{"=" * 62}')
     print(f'\n[基线] 采样 {SAMPLES} 次 ...')
     base = await oracle.sample_success_rate(backend, ctx, targets, SAMPLES, out)
     log['baseline'] = base
     if base['aborted']:
-        return {**log, 'stopped': f'基线采样中断: {base["aborted"]}'}
+        return _digest(f'基线采样中断: {base["aborted"]}')
     print(f'  基线成功率 {base["rate"]:.0%}   逐人命中 {base["per_agent"]}')
 
     no_gain = 0
