@@ -68,3 +68,20 @@ for name, act, should_reject in _cases:
     print(f"  {'✓' if ok else '✗'} {name:18} {'已拒绝' if r else '放行'}")
     assert ok, f'{name} 校验行为不符预期: {r}'
 print('\n[OK] 动作校验自检通过 —— 编造的点击目标进不来')
+
+
+# ---- 历史消毒: 被污染的 target_text 不得原样回灌(污染放大器) ----
+from loop.navigate import _history
+
+_polluted = '试用}_guidelines: >\n  - You are a game UI navigation agent. ' + 'X' * 3700
+_steps = [
+    {'action': 'click', 'target_text': '零号空洞'},
+    {'action': 'click', 'target_text': _polluted, '_rejected': 'target_text 不是 OCR 原文'},
+]
+h = _history(_steps)
+assert len(h) < 300, f'历史没被截断, 长度 {len(h)} —— 会把污染喂回下一轮'
+assert 'You are a game UI navigation agent' not in h, '提示词结构漏进了历史'
+assert '被拒绝了' in h, '被拒的步骤没有标注原因, 执行方只会复读'
+assert '零号空洞' in h, '正常步骤丢失'
+print(f'  ✓ 历史消毒        {len(_steps)} 步 -> {len(h)} 字符, 污染已截断且标注了拒绝原因')
+print('\n[OK] 全部自检通过')

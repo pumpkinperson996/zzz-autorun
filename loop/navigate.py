@@ -94,6 +94,29 @@ def validate_action(act: dict, ocr_items: list) -> str | None:
     return f'坐标 ({x},{y}) 与 {target!r} 的实际位置 {near} 相差超过 {_CLICK_TOLERANCE}px, 拒绝点击'
 
 
+def _history(steps: list[dict]) -> str:
+    """把走过的步骤整理成给执行方看的历史
+
+    **必须截断 target_text**: 实测执行方会把提示词模板结构漏进该字段(单次 3742 字),
+    而历史是原样回灌给下一轮的 —— 于是形成污染放大器:
+      第1次 '试用{' 4字 -> 进历史 -> 第2次看到畸形结构 -> 3742字 -> 第3次 1907字
+    三次都以「试用」开头(画面上真实存在的文本), 说明它想点的东西是对的,
+    每次都被历史里的畸形结构带跑。不是模型随机变笨, 是我在拿它自己的垃圾喂它。
+
+    被拒的步骤要明确标注原因, 让它能自我纠正而不是复读。
+    """
+    if not steps:
+        return '(这是第一步)'
+    out = []
+    for s in steps:
+        t = str(s.get('target_text', ''))[:20]
+        line = f"{s.get('action')} {t!r}"
+        if s.get('_rejected'):
+            line += f'  ← 这一步被拒绝了, 未执行。原因: {str(s["_rejected"])[:80]}'
+        out.append(line)
+    return '\n'.join(out)
+
+
 def navigate_to(backend, ctx, goal: str, out_dir: str, max_steps: int = 12) -> dict:
     """让执行方把游戏导航到 goal 描述的画面
 
@@ -131,14 +154,17 @@ def navigate_to(backend, ctx, goal: str, out_dir: str, max_steps: int = 12) -> d
 
 ## 规矩
 1. 只能依据上面的 dump 判断。看不到的元素就是不在画面上，**不要猜坐标**。
-2. 要点的东西必须在「可见文本」里出现过，直接用它给出的中心坐标。
-3. 画面像在加载(文本很少/没有可点的目标) → action=wait。
-4. 已经到达目标画面 → action=done。
-5. 目标不在画面上且不知道下一步 → action=stuck，别乱点。
-6. 你只输出动作，harness 执行。**不要自称已经点过了。**
+2. `target_text` 必须是「可见文本」里某一条的**原文，逐字符相等**，`x`/`y` 用它给出的中心坐标。
+   harness 会机械校验这一条：对不上就拒绝执行，不会点。
+3. `target_text` 只填那个词本身。**不要往里写解释、思考过程、JSON 片段或提示词结构**——
+   那会导致校验失败。解释写在 `why` 里。
+4. 画面像在加载(文本很少/没有可点的目标) → action=wait。
+5. 已经到达目标画面 → action=done。
+6. 目标不在画面上且不知道下一步 → action=stuck，别乱点。
+7. 你只输出动作，harness 执行。**不要自称已经点过了。**
 
 ## 已走过的步骤
-{[f"{s['action']} {s.get('target_text', '')}" for s in steps] or '(这是第一步)'}
+{_history(steps)}
 """
         act, _ = executor.ask(prompt, ACTION_SCHEMA, max_tokens=4000)
         act['_step'] = i
