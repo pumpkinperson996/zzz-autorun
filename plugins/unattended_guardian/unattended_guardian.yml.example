@@ -1,0 +1,10 @@
+detect_enabled: true
+check_interval_seconds: 1
+kicked_cooldown_minutes: 120
+kicked_keywords:
+- 其他地方登录
+- 账号在其他地方
+- 您的账号在其他
+- 被迫下线
+- 服务器连接超时
+- 是否继续尝试连接

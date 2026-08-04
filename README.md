@@ -58,13 +58,15 @@ AHK 在每次恢复前读取该标记。冷却未结束时只等待；结束后�
 - 一条龙启动器：`C:\ZZZ-OD\OneDragon-Launcher.exe`。
 - 一条龙内置 Python：`C:\ZZZ-OD\.install\python\cpython-3.11.12-windows-x86_64-none\python.exe`。
 - Python 环境需要 `pywin32`、`mss`、`Pillow` 和 Windows Media OCR 对应的 `winrt` 包；一条龙完整环境通常已经包含这些依赖。
-- 本仓库应放在 `C:\ZZZ-OD\ZZZ-autorun`。
+- 本仓库应单独放在 `C:\ZZZ-autorun`，不要嵌入一条龙安装目录。
 
 关键文件：
 
 ```text
 ZZZ-autorun/
 ├── OneDragon_FINAL_Restart_90min.ahk
+├── plugins/
+│   └── unattended_guardian/       # 需单独复制到一条龙 plugins 目录
 ├── scripts/
 │   ├── click_start_button.py
 │   └── click_start_button_uia.ps1
@@ -80,12 +82,13 @@ ZZZ-autorun/
 2. 把仓库克隆到固定目录：
 
    ```powershell
-   git clone https://github.com/pumpkinperson996/zzz-autorun.git C:\ZZZ-OD\ZZZ-autorun
+   git clone https://github.com/pumpkinperson996/zzz-autorun.git C:\ZZZ-autorun
    ```
 
 3. 确认一条龙完整环境与上述 Python 依赖已经安装。
-4. 双击 `OneDragon_FINAL_Restart_90min.ahk`。
-5. 打开 `查看实时日志.bat`，确认日志依次出现：
+4. 按下一节把无人值守守护插件复制到一条龙的 `plugins` 目录，并验证插件运行状态。
+5. 双击 `OneDragon_FINAL_Restart_90min.ahk`。
+6. 打开 `查看实时日志.bat`，确认日志依次出现：
 
    ```text
    START: button invoked, result=OK:OCR:x=1376,y=834
@@ -93,7 +96,26 @@ ZZZ-autorun/
    MONITOR: armed
    ```
 
-需要开机自启时，可在 Windows 任务计划程序中用 AutoHotkey v1.1 启动主脚本，并把起始目录设为 `C:\ZZZ-OD\ZZZ-autorun`。脚本本身不会创建每日强制重启电脑的任务。
+需要开机自启时，可在 Windows 任务计划程序中用 AutoHotkey v1.1 启动主脚本，并把起始目录设为 `C:\ZZZ-autorun`。脚本本身不会创建每日强制重启电脑的任务。
+
+### 安装无人值守守护插件
+
+克隆本仓库只会下载插件源码，不会自动安装。关闭游戏、一条龙和 AHK 后，首次安装可执行：
+
+```powershell
+$source = "C:\ZZZ-autorun\plugins\unattended_guardian"
+$target = "C:\ZZZ-OD\plugins\unattended_guardian"
+
+if (Test-Path $target) {
+    throw "插件已存在，请按详细说明中的升级步骤操作：$target"
+}
+
+Copy-Item -LiteralPath $source -Destination $target -Recurse
+```
+
+重启一条龙后，确认默认应用列表中出现“无人值守安全守护”，并运行一次状态检查。升级、配置、回滚、卸载和排障步骤见 [插件详细安装说明](plugins/unattended_guardian/README.md)。
+
+> 只运行 AHK 而没有安装该插件时，普通故障重启仍然可用，但没有顶号和未授权重登录保护。
 
 ### 启动定位诊断
 
@@ -101,7 +123,7 @@ ZZZ-autorun/
 
 ```powershell
 & "C:\ZZZ-OD\.install\python\cpython-3.11.12-windows-x86_64-none\python.exe" `
-  "C:\ZZZ-OD\ZZZ-autorun\scripts\click_start_button.py" --locate-only
+  "C:\ZZZ-autorun\scripts\click_start_button.py" --locate-only
 ```
 
 成功时输出 `OK:UIA:x=...,y=...` 或 `OK:OCR:x=...,y=...`。`RETRY:*` 表示窗口或按钮尚未就绪；`ERROR:*` 表示依赖、截图或坐标校验异常。添加 `--skip-uia` 可单独验证 OCR 兜底。
@@ -130,7 +152,7 @@ ZZZ-autorun/
 
 ```powershell
 & "C:\Program Files\AutoHotkey\AutoHotkey.exe" /ErrorStdOut `
-  "C:\ZZZ-OD\ZZZ-autorun\OneDragon_FINAL_Restart_90min.ahk" --check
+  "C:\ZZZ-autorun\OneDragon_FINAL_Restart_90min.ahk" --check
 
 & "C:\ZZZ-OD\.install\python\cpython-3.11.12-windows-x86_64-none\python.exe" `
   -m unittest scripts.test_click_start_button
@@ -189,13 +211,15 @@ Window movement, resizing, and resolution changes no longer depend on a historic
 - OneDragon launcher: `C:\ZZZ-OD\OneDragon-Launcher.exe`.
 - Bundled OneDragon Python: `C:\ZZZ-OD\.install\python\cpython-3.11.12-windows-x86_64-none\python.exe`.
 - Python packages: `pywin32`, `mss`, `Pillow`, and the `winrt` packages needed by Windows Media OCR. The OneDragon full environment normally includes them.
-- Clone this repository to `C:\ZZZ-OD\ZZZ-autorun`.
+- Keep this repository separate at `C:\ZZZ-autorun`, outside the OneDragon installation directory.
 
 Key files:
 
 ```text
 ZZZ-autorun/
 ├── OneDragon_FINAL_Restart_90min.ahk
+├── plugins/
+│   └── unattended_guardian/       # Copy separately into OneDragon's plugins directory
 ├── scripts/
 │   ├── click_start_button.py
 │   └── click_start_button_uia.ps1
@@ -211,12 +235,13 @@ ZZZ-autorun/
 2. Clone the repository to the fixed location:
 
    ```powershell
-   git clone https://github.com/pumpkinperson996/zzz-autorun.git C:\ZZZ-OD\ZZZ-autorun
+   git clone https://github.com/pumpkinperson996/zzz-autorun.git C:\ZZZ-autorun
    ```
 
 3. Make sure the full OneDragon environment and the Python dependencies above are installed.
-4. Double-click `OneDragon_FINAL_Restart_90min.ahk`.
-5. Open `查看实时日志.bat` and confirm that the log reaches:
+4. Copy and verify the Unattended Guardian plugin as described below.
+5. Double-click `OneDragon_FINAL_Restart_90min.ahk`.
+6. Open `查看实时日志.bat` and confirm that the log reaches:
 
    ```text
    START: button invoked, result=OK:OCR:x=1376,y=834
@@ -224,7 +249,26 @@ ZZZ-autorun/
    MONITOR: armed
    ```
 
-For startup at sign-in, configure Windows Task Scheduler to run the main script with AutoHotkey v1.1 and set `C:\ZZZ-OD\ZZZ-autorun` as the working directory. The script does not create a daily forced-reboot task.
+For startup at sign-in, configure Windows Task Scheduler to run the main script with AutoHotkey v1.1 and set `C:\ZZZ-autorun` as the working directory. The script does not create a daily forced-reboot task.
+
+### Install the Unattended Guardian plugin
+
+Cloning this repository downloads the plugin source but does not install it. Stop the game, OneDragon, and AHK, then run this for a first installation:
+
+```powershell
+$source = "C:\ZZZ-autorun\plugins\unattended_guardian"
+$target = "C:\ZZZ-OD\plugins\unattended_guardian"
+
+if (Test-Path $target) {
+    throw "The plugin already exists. Follow the upgrade guide: $target"
+}
+
+Copy-Item -LiteralPath $source -Destination $target -Recurse
+```
+
+Restart OneDragon, confirm that “无人值守安全守护” appears in the default application list, and run its status check once. See the [detailed plugin installation guide](plugins/unattended_guardian/README.md) for configuration, upgrades, rollback, uninstall, and troubleshooting.
+
+> AHK can still restart ordinary failures without the plugin, but login-conflict and unauthorized-relogin protection will be absent.
 
 ### Start-button diagnostics
 
@@ -232,7 +276,7 @@ Locate the current Qt home-page button without clicking it:
 
 ```powershell
 & "C:\ZZZ-OD\.install\python\cpython-3.11.12-windows-x86_64-none\python.exe" `
-  "C:\ZZZ-OD\ZZZ-autorun\scripts\click_start_button.py" --locate-only
+  "C:\ZZZ-autorun\scripts\click_start_button.py" --locate-only
 ```
 
 Success returns `OK:UIA:x=...,y=...` or `OK:OCR:x=...,y=...`. `RETRY:*` means that the window or button is not ready; `ERROR:*` reports a dependency, capture, or coordinate-validation failure. Add `--skip-uia` to test the OCR fallback directly.
@@ -261,7 +305,7 @@ The current implementation is an experimental tool, not a complete statistically
 
 ```powershell
 & "C:\Program Files\AutoHotkey\AutoHotkey.exe" /ErrorStdOut `
-  "C:\ZZZ-OD\ZZZ-autorun\OneDragon_FINAL_Restart_90min.ahk" --check
+  "C:\ZZZ-autorun\OneDragon_FINAL_Restart_90min.ahk" --check
 
 & "C:\ZZZ-OD\.install\python\cpython-3.11.12-windows-x86_64-none\python.exe" `
   -m unittest scripts.test_click_start_button

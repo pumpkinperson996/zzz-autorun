@@ -6,16 +6,17 @@ SendMode, Input
 CoordMode, Pixel, Screen
 
 ; ===== CONFIG =====
+autorunDir := A_ScriptDir
 launcher := "C:\ZZZ-OD\OneDragon-Launcher.exe"
 workdir  := "C:\ZZZ-OD"
 
-logFile  := "C:\ZZZ-OD\ZZZ-autorun\logs\closedloop.log"
+logFile  := autorunDir . "\logs\closedloop.log"
 kickedMarker := "C:\ZZZ-OD\.debug\temp\unattended_kicked_until.txt"
 
 ; 「启动一条龙」按钮定位：UI Automation 优先，Windows OCR 兜底
 ; 助手只在 GUI 启动阶段单次运行，不承担顶号检测
 startClickPython := "C:\ZZZ-OD\.install\python\cpython-3.11.12-windows-x86_64-none\python.exe"
-startClickScript := "C:\ZZZ-OD\ZZZ-autorun\scripts\click_start_button.py"
+startClickScript := autorunDir . "\scripts\click_start_button.py"
 startClickRetryInterval := 2000
 startClickTimeout := 60000
 startConfirmTimeout := 180000

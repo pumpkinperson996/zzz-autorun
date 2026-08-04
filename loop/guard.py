@@ -23,12 +23,13 @@ ALLOWED_ROOT = 'plugins/lost_void_film'
 # config/  : 用户的真实配置与缺口缓存, 不是代码
 # assets/  : 模板与模型。感知类(A类)故障必须由人补模板 —— 模型调阈值只会让
 #            另外 199 个场景悄悄变坏, 而这种坏没有任何判据能抓住
-# ZZZ-autorun/ : 闭环自身。模型不得改自己的栏杆
+# C:/ZZZ-autorun/ : 闭环自身。模型不得改自己的栏杆
 FORBIDDEN_ROOTS = (
     'src/',
     'config/',
     'assets/',
     'ZZZ-autorun/',
+    'C:/ZZZ-autorun/',
     '.git/',
 )
 
@@ -149,7 +150,7 @@ if __name__ == '__main__':
     assert 'src/' in blocked('src/zzz_od/application/hollow_zero/lost_void/lost_void_app.py')
     assert 'config/' in blocked('config/01/lost_void_film/lost_void.yml')
     assert 'assets/' in blocked('assets/template/agent_state/x.png')
-    assert 'ZZZ-autorun/' in blocked('ZZZ-autorun/loop/guard.py')
+    assert 'C:/ZZZ-autorun/' in blocked(r'C:\ZZZ-autorun\loop\guard.py')
     # 范围外
     assert '仅限' in blocked('plugins/unattended_guardian/guardian_loop.py')
     # 父目录跳转不得绕出允许目录

@@ -1,2 +1,2 @@
 @echo off
-powershell -NoExit -Command "Get-Content 'C:\ZZZ-OD\ZZZ-autorun\logs\closedloop.log' -Wait -Tail 40"
+powershell -NoExit -Command "Get-Content -LiteralPath '%~dp0logs\closedloop.log' -Wait -Tail 40"

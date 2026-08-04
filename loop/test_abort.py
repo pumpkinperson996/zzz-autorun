@@ -2,8 +2,9 @@
 """自检: 必停锁真的拦得住吗 —— 用当时那个顶号画面的 OCR 原文"""
 import io
 import sys
+from pathlib import Path
 
-sys.path.insert(0, r'C:\ZZZ-OD\ZZZ-autorun')
+sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding='utf-8', errors='replace')
 from loop.oracle import Abort, check_abort
 
