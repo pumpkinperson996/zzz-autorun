@@ -1,431 +1,274 @@
-# ZZZ-Autorun：绝区零一条龙无人值守监控
+# ZZZ-Autorun
 
-## 关于绝区零一条龙
+**绝区零一条龙的本机无人值守恢复与实机实验工具**
 
-**绝区零一条龙**（ZenlessZoneZero-OneDragon）是由 [DoctorReid](https://github.com/DoctorReid) 开发的开源自动化工具，专为米哈游旗下游戏《绝区零》设计。它能够自动完成游戏内的每日任务、刷材料、空洞挑战等重复性操作，极大地节省玩家时间。
+**Local unattended recovery and live-experiment tools for ZenlessZoneZero-OneDragon**
 
-> 项目地址：[https://github.com/DoctorReid/ZenlessZoneZero-OneDragon](https://github.com/DoctorReid/ZenlessZoneZero-OneDragon)
+[中文](#中文) · [English](#english)
 
----
-
-## 本项目是什么
-
-**ZZZ-Autorun** 是运行在一条龙之上的**外部监控与自动恢复层**。
-
-一条龙本身专注于游戏操作的自动化，但在长时间无人值守运行时，面临以下现实问题：
-
-- 运行过程中出现错误或卡死，没有人手动重启
-- 账号在其他设备登录（被顶号），游戏弹出提示后无人处理，一条龙停止工作
-- 游戏进程意外崩溃，没有人发现和恢复
-- 电脑每天需要手动重启和重新启动脚本
-
-ZZZ-Autorun 解决的正是这些问题。它在后台持续运行，监控一条龙和游戏的状态，在任何异常发生时自动介入处理，让整套系统真正做到**无人值守、全天候自动运行**。
+> [!IMPORTANT]
+> 本项目仅支持 Windows，默认安装目录为 `C:\ZZZ-OD`，主脚本使用 AutoHotkey v1.1。
+>
+> This project is Windows-only, assumes `C:\ZZZ-OD`, and requires AutoHotkey v1.1.
 
 ---
 
-## 为什么需要这个项目
+## 中文
 
-### 对「拿命验收」功能的重要性
+### 项目简介
 
-一条龙中的**拿命验收**（空洞副本自动挑战）是对无人值守稳定性要求最高的功能之一。
+ZZZ-Autorun 是 [ZenlessZoneZero-OneDragon](https://github.com/OneDragon-Anything/ZenlessZoneZero-OneDragon) 的外部恢复层。它负责启动一条龙、调用首页的「启动一条龙」、确认任务真正开始，并在进程退出、日志报错或定时刷新时恢复运行。
 
-拿命验收需要连续完成多轮空洞副本挑战，运行时间长，期间任何中断都意味着当日进度停止。而中断的原因往往不是游戏本身的问题，而是外部因素：
+仓库还包含一套实验性的实机闭环工具，用于收集游戏现场证据、限制自动补丁范围并比较实机结果。该部分仍处于实验阶段，不应直接加入无人值守计划任务。
 
-- **被顶号**：账号在另一台设备登录，游戏弹出「您的账号在其他地方登录」提示。此时游戏进入等待状态，一条龙无法继续操作，拿命验收就此停止。没有外部监控的情况下，这个状态会一直持续到有人手动处理。
-- **运行失败**：空洞副本中某一步骤识别失败，一条龙记录失败状态后停止，后续所有任务都不会执行。
-- **进程崩溃**：游戏或一条龙意外退出，整个自动化流程中断。
+### 主要功能
 
-ZZZ-Autorun 针对以上每一种情况都有对应的自动处理机制：
+| 功能 | 默认行为 |
+|---|---|
+| 启动按钮定位 | 优先使用 Windows UI Automation；Qt 未暴露按钮时使用 Windows OCR |
+| 启动确认 | 等待一条龙新增日志或新的游戏进程，避免“点了但没启动” |
+| 失败恢复 | 每 30 秒扫描一条龙日志，检测失败后重启游戏和一条龙 |
+| 进程守卫 | 每 10 分钟检查游戏与一条龙进程 |
+| 定时刷新 | 每 1 小时重启一次；文件名中的 `90min` 只是历史名称 |
+| 顶号冷却 | 读取主程序守护插件写入的冷却标记，冷却结束前不重新登录 |
+| 手动暂停 | `F10` 暂停外部恢复监控，`F9` 恢复 |
 
-| 异常情况 | 检测方式 | 处理动作 |
-|----------|----------|----------|
-| 被顶号弹窗 | OCR 识别游戏画面文字，每 0.5 秒检测一次 | 关闭游戏和一条龙，等待 2 小时后自动重启接管账号 |
-| 一条龙运行失败 | 读取一条龙日志文件，每 30 秒扫描一次 | 立即关闭并重启，继续执行任务 |
-| 进程意外消失 | 进程守卫每 10 分钟检查一次 | 检测到异常立即重启 |
-| 长时间运行卡死 | 每 1 小时强制重启一次 | 清除潜在的卡死状态，保持运行健康 |
+顶号弹窗的持续检测由一条龙安装目录中的 `plugins/unattended_guardian` 负责，不再由 AHK 持续 OCR。插件可写入以下冷却标记：
 
-有了这套监控，拿命验收可以在夜间或无人时段完整跑完，无需人守着处理突发状况。
-
----
-
-## 目录
-
-1. [整体流程是什么](#1-整体流程是什么)
-2. [文件放在哪里](#2-文件放在哪里)
-3. [首次配置步骤](#3-首次配置步骤)
-   - [3A. 安装 AutoHotkey](#3a-安装-autohotkey)
-   - [3B. 安装 Python OCR 依赖](#3b-安装-python-ocr-依赖)
-   - [3C. 配置 Windows 自动登录](#3c-配置-windows-自动登录)
-   - [3D. 配置任务计划程序](#3d-配置任务计划程序)
-4. [日常使用说明](#4-日常使用说明)
-   - [启动与停止脚本](#启动与停止脚本)
-   - [手动模式（自己玩游戏）](#手动模式自己玩游戏)
-   - [查看运行状态](#查看运行状态)
-5. [脚本参数说明](#5-脚本参数说明)
-6. [测试方法](#6-测试方法)
-7. [常见问题排查](#7-常见问题排查)
-
----
-
-## 1. 整体流程是什么
-
-```
-每天凌晨 4 点 → 电脑自动重启
-       ↓
-  Windows 自动登录
-       ↓
-  自动启动监控脚本
-       ↓
-  脚本启动 OneDragon-Launcher.exe
-       ↓
-  等待一条龙界面加载完成
-       ↓
-  自动点击「启动一条龙 🚀」按钮
-       ↓
-  ┌──────────────────────────────────────────────────────────┐
-  │  持续监控（四条并行检测线）                                │
-  │                                                          │
-  │  ① 每 0.5 秒  OCR 识别游戏画面，检测是否出现              │
-  │               「其他地方登录」字样（被顶号弹窗）           │
-  │               F10 暂停期间此检测仍然持续运行               │
-  │  ② 每 30 秒   读取一条龙日志，检测是否出现               │
-  │               「指令[ 一条龙 ] 执行失败」                 │
-  │  ③ 每 10 分钟 检查两个进程是否都还活着（进程守卫）         │
-  │  ④ 每 1 小时  强制重启一条龙（防止长时间运行卡死）         │
-  └──────────────────────────────────────────────────────────┘
-       ↓ 触发后
-  关闭游戏本体 + 关闭一条龙
-       ↓
-  ① 触发：等待 2 小时再重启（账号被顶号，等待对方用完）
-  ②③④ 触发：立即重启（运行出错或进程消失）
-       ↓
-  重新启动一条龙（游戏由一条龙自动拉起）
-       ↓
-  回到「持续监控」状态
+```text
+C:\ZZZ-OD\.debug\temp\unattended_kicked_until.txt
 ```
 
-**被顶号检测**：使用 Windows 内置 OCR 引擎识别游戏画面文字，不依赖截图文件，不受分辨率变化影响。
+AHK 在每次恢复前读取该标记。冷却未结束时只等待；结束后删除标记并继续启动。
 
-**进程守卫**：启动一条龙后有 3 分钟宽限期，避免游戏还没拉起来就误判。
+### 启动流程
 
----
+1. 启动 `C:\ZZZ-OD\OneDragon-Launcher.exe`。
+2. 等待 Qt 主窗口，并额外等待 15 秒完成应用注册。
+3. UI Automation 按 `AutomationId=start_button` 或名称「启动一条龙」查找按钮。
+4. UI Automation 不可用时，OCR 只接受规范化后与「启动一条龙」完全一致、位于客户区右下区域的文字。
+5. 调用按钮后，等待 `.log\log.txt` 出现新的顶层一条龙日志，或检测到新游戏进程。
+6. 确认成功后才进入失败检测、进程守卫和定时刷新。
 
-## 2. 文件放在哪里
+窗口移动、缩放或分辨率变化不再依赖历史固定坐标。OCR 点击坐标必须同时位于 Qt 客户区和 Windows 虚拟桌面内，否则助手会拒绝点击。
 
-**所有文件统一放在 `C:\ZZZ-OD\ZZZ-autorun\` 目录下**，与一条龙主程序分开。
+### 环境与目录
 
+- AutoHotkey v1.1；脚本不是 v2 语法。
+- 一条龙启动器：`C:\ZZZ-OD\OneDragon-Launcher.exe`。
+- 一条龙内置 Python：`C:\ZZZ-OD\.install\python\cpython-3.11.12-windows-x86_64-none\python.exe`。
+- Python 环境需要 `pywin32`、`mss`、`Pillow` 和 Windows Media OCR 对应的 `winrt` 包；一条龙完整环境通常已经包含这些依赖。
+- 本仓库应放在 `C:\ZZZ-OD\ZZZ-autorun`。
+
+关键文件：
+
+```text
+ZZZ-autorun/
+├── OneDragon_FINAL_Restart_90min.ahk
+├── scripts/
+│   ├── click_start_button.py
+│   └── click_start_button_uia.ps1
+├── loop/                         # 实验性实机闭环
+├── 查看实时日志.bat
+├── 清空日志.bat
+└── logs/closedloop.log           # 运行时生成，不提交到 Git
 ```
-C:\ZZZ-OD\
-├── OneDragon-Launcher.exe      ← 一条龙（不要动）
-├── .install\                   ← 一条龙（不要动）
-├── .log\                       ← 一条龙运行日志（不要动）
-│
-└── ZZZ-autorun\                ← 你的自动化脚本目录
-    ├── OneDragon_FINAL_Restart_90min.ahk   ← 主监控脚本（双击运行）
-    ├── OCR测试工具.bat                      ← 双击打开 OCR 实时检测
-    ├── 查看实时日志.bat                     ← 双击实时查看运行日志
-    ├── 清空日志.bat                         ← 双击删除日志文件
-    ├── logs\
-    │   └── closedloop.log                  ← 运行日志（自动生成）
-    └── scripts\
-        ├── ocrcheck.py                     ← OCR 检测逻辑（不要动）
-        └── ocrtest_gui.py                  ← OCR 测试界面（不要动）
-```
 
-从 GitHub 下载文件后，按照上面的结构放好即可。**不需要修改任何代码**，直接双击 `.ahk` 文件运行。
+### 快速开始
 
----
+1. 安装 [AutoHotkey v1.1](https://www.autohotkey.com/)。
+2. 把仓库克隆到固定目录：
 
-## 3. 首次配置步骤
+   ```powershell
+   git clone https://github.com/pumpkinperson996/zzz-autorun.git C:\ZZZ-OD\ZZZ-autorun
+   ```
 
-### 3A. 安装 AutoHotkey
+3. 确认一条龙完整环境与上述 Python 依赖已经安装。
+4. 双击 `OneDragon_FINAL_Restart_90min.ahk`。
+5. 打开 `查看实时日志.bat`，确认日志依次出现：
 
-1. 访问 [https://www.autohotkey.com/](https://www.autohotkey.com/)
-2. 点击 **Download** → 选择 **AutoHotkey v1.1**（必须是 v1，不是 v2）
-3. 安装完成后 `.ahk` 文件会显示绿色图标
+   ```text
+   START: button invoked, result=OK:OCR:x=1376,y=834
+   START: confirmed via onedragon_log
+   MONITOR: armed
+   ```
 
----
+需要开机自启时，可在 Windows 任务计划程序中用 AutoHotkey v1.1 启动主脚本，并把起始目录设为 `C:\ZZZ-OD\ZZZ-autorun`。脚本本身不会创建每日强制重启电脑的任务。
 
-### 3B. 安装 Python OCR 依赖
+### 启动定位诊断
 
-被顶号检测需要安装 Python 包，**只需安装一次**。
-
-打开 PowerShell（搜索栏输入 `powershell`），粘贴以下命令回车：
+只定位、不点击当前 Qt 首页按钮：
 
 ```powershell
-& "C:\ZZZ-OD\.install\python\cpython-3.11.12-windows-x86_64-none\python.exe" -m pip install winrt-runtime "winrt-Windows.Media.Ocr" "winrt-Windows.Graphics.Imaging" "winrt-Windows.Storage.Streams" "winrt-Windows.Security.Cryptography" "winrt-Windows.Foundation" "winrt-Windows.Globalization" "winrt-Windows.Foundation.Collections" mss pywin32 Pillow
+& "C:\ZZZ-OD\.install\python\cpython-3.11.12-windows-x86_64-none\python.exe" `
+  "C:\ZZZ-OD\ZZZ-autorun\scripts\click_start_button.py" --locate-only
 ```
 
-安装完成后运行一次 OCR 测试工具确认正常（见第 6 节）。
+成功时输出 `OK:UIA:x=...,y=...` 或 `OK:OCR:x=...,y=...`。`RETRY:*` 表示窗口或按钮尚未就绪；`ERROR:*` 表示依赖、截图或坐标校验异常。添加 `--skip-uia` 可单独验证 OCR 兜底。
 
----
+### 手动控制
 
-### 3C. 配置 Windows 自动登录
+- `F10`：暂停外部恢复监控。
+- `F9`：恢复外部恢复监控。
+- `查看实时日志.bat`：查看 `logs\closedloop.log`。
+- `清空日志.bat`：清空运行日志。
 
-电脑重启后需要自动进入桌面，否则脚本无法启动。
+### 实验性实机闭环
 
-1. 按 `Win + R`，输入 `netplwiz`，回车
-2. 点击你的账户
-3. **取消勾选**「要使用本计算机，用户必须输入用户名和密码」
-4. 点「应用」，输入 Windows 登录密码（两次），确定
-5. 重启验证：应直接进入桌面
+`loop/` 包含执行方客户端、导航、异常界面必停锁、文件改动安全锁、实机采样和常驻刷菲林工具。它可能修改并回滚 `C:\ZZZ-OD\plugins\lost_void_film` 中的源码，因此只适合了解实现细节并能检查 Git 状态的开发者。
 
-> ⚠️ 自动登录意味着任何人拿到电脑都能进入系统，请确保电脑处于安全环境。
+使用前至少需要：
 
----
+- `plugins/lost_void_film` 有独立、干净的 Git 工作区；
+- `C:\ZZZ-OD\.env` 中配置 `FIREWORKS_API_KEY`；
+- 游戏窗口可用，且没有其他自动化同时控制游戏；
+- 人工审查采样数、判定标准和最终补丁。
 
-### 3D. 配置任务计划程序
+当前实现仍是实验工具，不代表完整、可长期无人值守的统计闭环。不要直接把 `python -m loop.run` 加入计划任务。
 
-设置开机自动启动监控脚本，并每天凌晨 4 点重启电脑。
-
-按 `Win + S` 搜索「任务计划程序」打开。
-
-#### 任务一：每天定时重启
-
-1. 右侧点「**创建基本任务**」
-2. 名称填 `Daily Reboot 4AM`
-3. 触发器选「每天」，时间填 `04:00:00`
-4. 操作选「启动程序」，程序填：
-   ```
-   C:\Windows\System32\shutdown.exe
-   ```
-5. 参数填：
-   ```
-   /r /t 0 /f
-   ```
-6. 完成
-
-#### 任务二：登录后自动启动脚本
-
-1. 右侧点「**创建任务**」
-2. **「常规」选项卡**：
-   - 名称填 `OneDragon AutoRun`
-   - 勾选「**使用最高权限运行**」
-   - 配置选 `Windows 10`
-3. **「触发器」选项卡**：新建 → 开始任务选「**登录时**」→ 确定
-4. **「操作」选项卡**：新建 → 启动程序：
-   - 程序或脚本：
-     ```
-     C:\Program Files\AutoHotkey\v1.1\AutoHotkey.exe
-     ```
-   - 添加参数：
-     ```
-     "C:\ZZZ-OD\ZZZ-autorun\OneDragon_FINAL_Restart_90min.ahk"
-     ```
-   - 起始于：
-     ```
-     C:\ZZZ-OD\ZZZ-autorun
-     ```
-5. **「设置」选项卡**：「如果此任务已经运行」改为「**不启动新实例**」
-6. 确定保存
-
-**验证**：注销再重新登录，看任务栏右下角是否出现 AutoHotkey 图标（绿色 H 形）。
-
----
-
-## 4. 日常使用说明
-
-### 启动与停止脚本
-
-| 操作 | 方法 |
-|------|------|
-| 启动脚本 | 双击 `OneDragon_FINAL_Restart_90min.ahk` |
-| 停止脚本 | 任务管理器 → 找到 AutoHotkey 进程 → 结束任务 |
-| 重启脚本 | 先结束任务，再双击 `.ahk` 文件 |
-
-> 修改脚本参数后必须重启脚本才能生效。
-
----
-
-### 手动模式（自己玩游戏）
-
-| 按键 | 效果 |
-|------|------|
-| `F10` | 暂停监控（同时停止一条龙） |
-| `F9` | 恢复监控（同时恢复一条龙） |
-
-按 F10 后屏幕左上角会弹出**红色「监控已暂停」**提示框，按 F9 弹出**绿色「监控已恢复」**。
-
-**注意**：F10 暂停期间，日志扫描和进程守卫停止，但**被顶号 OCR 检测仍然运行**——手动游玩时被顶号仍会自动处理。
-
----
-
-### 查看运行状态
-
-| 工具 | 用途 |
-|------|------|
-| 双击 `查看实时日志.bat` | 实时滚动显示运行日志，有新内容自动刷新 |
-| 双击 `OCR测试工具.bat` | 实时查看 OCR 识别内容，验证被顶号检测是否正常 |
-| 双击 `清空日志.bat` | 删除旧日志文件（重新测试前用） |
-
-日志文件位于：
-```
-C:\ZZZ-OD\ZZZ-autorun\logs\closedloop.log
-```
-
-**正常运行时日志样例：**
-```
-2026-05-19 06:00:01  BOOT: closed-loop started.
-2026-05-19 06:00:05  START: clicked start button at screen x=2535 y=1535
-2026-05-19 06:00:05  MONITOR: armed
-2026-05-19 06:05:05  OCR: heartbeat result=NOT_FOUND
-```
-
-> `MONITOR: armed` 出现后所有检测才开始工作，看到这行说明脚本运行正常。
-
-**检测到被顶号：**
-```
-2026-05-19 10:15:33  OCR: state changed -> FOUND
-2026-05-19 10:15:33  DETECTED: popup text found by OCR
-2026-05-19 10:15:33  CLOSE: force killing OneDragon
-2026-05-19 10:15:33  SLEEP: waiting before restart
-2026-05-19 12:15:33  RESTART: waking up          ← 2 小时后重启
-```
-
-**检测到运行失败：**
-```
-2026-05-19 08:23:11  FAILDETECT: failure pattern found in OneDragon log
-2026-05-19 08:23:12  FAILDETECT: restarting OneDragon
-```
-
----
-
-## 5. 脚本参数说明
-
-用记事本打开 `OneDragon_FINAL_Restart_90min.ahk`，顶部 `===== CONFIG =====` 区域内的参数可以修改：
-
-| 参数 | 默认值 | 说明 |
-|------|--------|------|
-| `btnX` / `btnY` | `1470` / `1055` | 「启动一条龙」按钮坐标，用 Window Spy 测量 |
-| `postLaunchSleep` | `1500` | 一条龙启动后等多久再点按钮（毫秒） |
-| `ocrInterval` | `500` | 被顶号 OCR 检测间隔（毫秒） |
-| `restartDelay` | `7200000` | 被顶号后等多久重启（毫秒），默认 2 小时 |
-| `failCheckInterval` | `30000` | 读取一条龙日志间隔（毫秒），默认 30 秒 |
-| `periodicRestartInterval` | `3600000` | 定时强制重启间隔（毫秒），默认 1 小时 |
-
-**按钮坐标如何测量：**
-1. 打开 AutoHotkey 安装目录，找到 `WindowSpy.ahk` 双击运行
-2. 启动一条龙，等界面加载完成
-3. 鼠标移到「启动一条龙 🚀」按钮正中心
-4. 记录 Window Spy 里 `Client` 那行的两个数字，填入 `btnX` 和 `btnY`
-
-**常用时间换算：**
-```
-30000  = 30 秒     600000  = 10 分钟
-60000  = 1 分钟    3600000 = 1 小时
-300000 = 5 分钟    7200000 = 2 小时
-```
-
----
-
-## 6. 测试方法
-
-### 测试一：确认脚本正常启动
-
-1. 双击 `OneDragon_FINAL_Restart_90min.ahk`
-2. 双击 `查看实时日志.bat`
-3. 等待日志出现 `MONITOR: armed`，出现后说明所有检测已开始工作
-
-### 测试二：测试被顶号 OCR 检测
-
-1. 确认游戏正在运行，日志已出现 `MONITOR: armed`
-2. 双击 `OCR测试工具.bat`，窗口显示 `NOT_FOUND` 为正常
-3. 打开记事本，输入 `其他地方登录`，字体调大，拖到游戏窗口上
-4. OCR 测试工具应变为绿色 `FOUND`
-5. 同时查看运行日志，应出现 `OCR: state changed -> FOUND`
-
-### 测试三：测试运行失败检测
-
-> 把 `failCheckInterval` 临时改为 `10000`（10 秒），测试完改回 `30000`。
-
-1. 等日志出现 `MONITOR: armed`
-2. 打开 PowerShell，粘贴以下命令回车：
+### 本地验证
 
 ```powershell
-$fs = [System.IO.FileStream]::new("C:\ZZZ-OD\.log\log.txt", [System.IO.FileMode]::Append, [System.IO.FileAccess]::Write, [System.IO.FileShare]::ReadWrite)
-$sw = [System.IO.StreamWriter]::new($fs, (New-Object System.Text.UTF8Encoding $false))
-$sw.WriteLine("指令[ 一条龙 ] 执行失败 返回状态 失败")
-$sw.Close(); $fs.Close()
+& "C:\Program Files\AutoHotkey\AutoHotkey.exe" /ErrorStdOut `
+  "C:\ZZZ-OD\ZZZ-autorun\OneDragon_FINAL_Restart_90min.ahk" --check
+
+& "C:\ZZZ-OD\.install\python\cpython-3.11.12-windows-x86_64-none\python.exe" `
+  -m unittest scripts.test_click_start_button
+
+& "C:\ZZZ-OD\.install\python\cpython-3.11.12-windows-x86_64-none\python.exe" `
+  loop\guard.py
+
+& "C:\ZZZ-OD\.install\python\cpython-3.11.12-windows-x86_64-none\python.exe" `
+  loop\test_abort.py
 ```
 
-3. 约 10 秒后日志应出现 `FAILDETECT`，一条龙被关闭并重启
-
 ---
 
-## 7. 常见问题排查
+## English
 
-### 脚本双击后没有反应
+### Overview
 
-- 确认 AutoHotkey v1.1 已安装（`.ahk` 文件应显示绿色图标）
-- 查看任务管理器，找 AutoHotkey 进程确认是否在运行
+ZZZ-Autorun is an external recovery layer for [ZenlessZoneZero-OneDragon](https://github.com/OneDragon-Anything/ZenlessZoneZero-OneDragon). It launches OneDragon, invokes the home-page “Start OneDragon” action, verifies that the run actually started, and recovers from process exits, failure logs, or scheduled refreshes.
 
-### 一条龙启动了但没有点击按钮
+The repository also contains experimental live-game loop tools for collecting evidence, restricting automated patches, and comparing results from real game runs. That part is still experimental and should not be added directly to an unattended scheduled task.
 
-1. 把 `postLaunchSleep` 改为 `4000`，等界面完全加载再点
-2. 用 Window Spy 重新测量按钮坐标，更新 `btnX` / `btnY`
+### Main features
 
-### 被顶号没有被检测到
+| Feature | Default behavior |
+|---|---|
+| Start-button discovery | Uses Windows UI Automation first, then Windows OCR when Qt does not expose the button |
+| Start confirmation | Waits for new OneDragon log output or a new game process, preventing false “clicked but not started” states |
+| Failure recovery | Scans the OneDragon log every 30 seconds and restarts both processes after a failure |
+| Process watchdog | Checks the game and OneDragon processes every 10 minutes |
+| Scheduled refresh | Restarts every hour; `90min` in the file name is historical |
+| Login-conflict cooldown | Reads the cooldown marker written by the guardian plugin and blocks login until it expires |
+| Manual pause | `F10` pauses external recovery monitoring; `F9` resumes it |
 
-- 查看日志里 `OCR: heartbeat result=` 后面的值：
-  - 空白 → Python OCR 依赖未安装，重新执行第 3B 节的安装命令
-  - `NO_GAME` → 脚本找不到游戏进程，确认游戏正在运行
-  - `NOT_FOUND` → OCR 正常运行，等待真实弹窗出现
-- 确认 Windows 已安装「中文（简体）」语言包（设置 → 时间和语言 → 语言）
+Continuous login-conflict detection belongs to `plugins/unattended_guardian` in the OneDragon installation; AHK no longer runs continuous OCR for that popup. The plugin can write this marker:
 
-### 日志里没有出现 `MONITOR: armed`
-
-脚本正在等待一条龙窗口出现，可能原因：
-- 一条龙启动较慢，等待片刻
-- **一条龙更新后 Qt 版本变化，导致窗口类名改变** → 使用 `ListPythonWindows.ahk` 诊断，见下方说明
-
----
-
-### 诊断工具：ListPythonWindows.ahk
-
-**用途**：查询一条龙当前使用的 Qt 窗口类名。
-
-**背景**：监控脚本通过窗口类名 `Qt680QWindowIcon` 来识别一条龙的窗口。类名中的数字（`680`）对应 Qt 版本号（Qt 6.8.0）。当一条龙升级并使用新版 Qt 时，类名随之变化（如 Qt 6.9.0 → `Qt690QWindowIcon`），监控脚本将无法找到窗口，导致 `MONITOR: armed` 永远不出现。
-
-**触发时机**：一条龙更新后监控脚本不工作，且日志停留在 `START: running launcher`。
-
-**操作步骤**：
-
-1. 关闭正在运行的一条龙（如有）
-2. 双击 `ListPythonWindows.ahk`，脚本会自动启动一条龙并等待 3 秒
-3. 等待记事本自动打开，查看 `logs\python_windows.txt` 的内容
-4. 找到类似以下的行：
-   ```
-   Class=[Qt690QWindowIcon]
-   ```
-5. 用记事本打开 `OneDragon_FINAL_Restart_90min.ahk`，按 `Ctrl+H` 全局替换：
-   - 查找：`Qt680QWindowIcon`
-   - 替换为：`Qt690QWindowIcon`（填你实际查到的类名）
-6. 保存，重启监控脚本
-
-### 电脑重启后脚本没有自动启动
-
-- 打开任务计划程序，检查 `OneDragon AutoRun` 任务是否存在
-- 右键任务 → 「运行」，手动触发一次，确认路径配置正确
-- 确认任务「常规」选项卡勾选了「使用最高权限运行」
-
-### 任务计划程序里任务一直显示「正在运行」
-
-正常现象，脚本会持续在后台运行。
-
----
-
-## 附录：文件清单
-
+```text
+C:\ZZZ-OD\.debug\temp\unattended_kicked_until.txt
 ```
-C:\ZZZ-OD\ZZZ-autorun\
-├── OneDragon_FINAL_Restart_90min.ahk   主监控脚本
-├── OCR测试工具.bat                      双击打开 OCR 实时检测窗口
-├── 查看实时日志.bat                     双击实时查看运行日志
-├── 清空日志.bat                         双击删除日志文件
-├── logs\
-│   └── closedloop.log                  运行日志（自动生成，无需手动创建）
-├── ListPythonWindows.ahk               Qt 窗口类名诊断工具（一条龙更新后使用）
-└── scripts\
-    ├── ocrcheck.py                     OCR 被顶号检测逻辑（勿移动）
-    └── ocrtest_gui.py                  OCR 测试工具源码（勿移动）
+
+AHK reads it before every recovery attempt. It waits while the cooldown is active, then removes the marker and resumes startup.
+
+### Startup flow
+
+1. Launch `C:\ZZZ-OD\OneDragon-Launcher.exe`.
+2. Wait for the Qt main window, then allow another 15 seconds for application registration.
+3. Search through UI Automation for `AutomationId=start_button` or the name “启动一条龙”.
+4. If UI Automation is unavailable, OCR accepts only text that normalizes exactly to “启动一条龙” and appears in the lower-right part of the client area.
+5. After invoking the button, wait for new top-level OneDragon output in `.log\log.txt` or a new game process.
+6. Arm failure detection, the process watchdog, and scheduled refresh only after startup is confirmed.
+
+Window movement, resizing, and resolution changes no longer depend on a historical fixed coordinate. An OCR click must be inside both the Qt client area and the Windows virtual desktop, or the helper refuses it.
+
+### Requirements and layout
+
+- AutoHotkey v1.1; the script is not compatible with v2 syntax.
+- OneDragon launcher: `C:\ZZZ-OD\OneDragon-Launcher.exe`.
+- Bundled OneDragon Python: `C:\ZZZ-OD\.install\python\cpython-3.11.12-windows-x86_64-none\python.exe`.
+- Python packages: `pywin32`, `mss`, `Pillow`, and the `winrt` packages needed by Windows Media OCR. The OneDragon full environment normally includes them.
+- Clone this repository to `C:\ZZZ-OD\ZZZ-autorun`.
+
+Key files:
+
+```text
+ZZZ-autorun/
+├── OneDragon_FINAL_Restart_90min.ahk
+├── scripts/
+│   ├── click_start_button.py
+│   └── click_start_button_uia.ps1
+├── loop/                         # Experimental live-game loop
+├── 查看实时日志.bat
+├── 清空日志.bat
+└── logs/closedloop.log           # Generated at runtime; not committed
+```
+
+### Quick start
+
+1. Install [AutoHotkey v1.1](https://www.autohotkey.com/).
+2. Clone the repository to the fixed location:
+
+   ```powershell
+   git clone https://github.com/pumpkinperson996/zzz-autorun.git C:\ZZZ-OD\ZZZ-autorun
+   ```
+
+3. Make sure the full OneDragon environment and the Python dependencies above are installed.
+4. Double-click `OneDragon_FINAL_Restart_90min.ahk`.
+5. Open `查看实时日志.bat` and confirm that the log reaches:
+
+   ```text
+   START: button invoked, result=OK:OCR:x=1376,y=834
+   START: confirmed via onedragon_log
+   MONITOR: armed
+   ```
+
+For startup at sign-in, configure Windows Task Scheduler to run the main script with AutoHotkey v1.1 and set `C:\ZZZ-OD\ZZZ-autorun` as the working directory. The script does not create a daily forced-reboot task.
+
+### Start-button diagnostics
+
+Locate the current Qt home-page button without clicking it:
+
+```powershell
+& "C:\ZZZ-OD\.install\python\cpython-3.11.12-windows-x86_64-none\python.exe" `
+  "C:\ZZZ-OD\ZZZ-autorun\scripts\click_start_button.py" --locate-only
+```
+
+Success returns `OK:UIA:x=...,y=...` or `OK:OCR:x=...,y=...`. `RETRY:*` means that the window or button is not ready; `ERROR:*` reports a dependency, capture, or coordinate-validation failure. Add `--skip-uia` to test the OCR fallback directly.
+
+### Manual controls
+
+- `F10`: pause external recovery monitoring.
+- `F9`: resume external recovery monitoring.
+- `查看实时日志.bat`: view `logs\closedloop.log`.
+- `清空日志.bat`: clear the runtime log.
+
+### Experimental live-game loop
+
+`loop/` contains the executor client, navigation, mandatory-stop checks for unexpected screens, file-write guards, live sampling, and continuous film farming tools. It can modify and roll back source files under `C:\ZZZ-OD\plugins\lost_void_film`, so it is intended only for developers who understand the implementation and can inspect Git state.
+
+Before using it, you need at least:
+
+- an independent, clean Git worktree for `plugins/lost_void_film`;
+- `FIREWORKS_API_KEY` in `C:\ZZZ-OD\.env`;
+- an available game window with no other automation controlling it;
+- human review of the sample size, acceptance criteria, and resulting patch.
+
+The current implementation is an experimental tool, not a complete statistically reliable unattended loop. Do not add `python -m loop.run` directly to Task Scheduler.
+
+### Local verification
+
+```powershell
+& "C:\Program Files\AutoHotkey\AutoHotkey.exe" /ErrorStdOut `
+  "C:\ZZZ-OD\ZZZ-autorun\OneDragon_FINAL_Restart_90min.ahk" --check
+
+& "C:\ZZZ-OD\.install\python\cpython-3.11.12-windows-x86_64-none\python.exe" `
+  -m unittest scripts.test_click_start_button
+
+& "C:\ZZZ-OD\.install\python\cpython-3.11.12-windows-x86_64-none\python.exe" `
+  loop\guard.py
+
+& "C:\ZZZ-OD\.install\python\cpython-3.11.12-windows-x86_64-none\python.exe" `
+  loop\test_abort.py
 ```

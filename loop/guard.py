@@ -12,6 +12,7 @@ from __future__ import annotations
 
 import os
 import re
+from pathlib import PurePosixPath
 
 # 唯一允许改动的目录 —— 闭环的作用对象
 ALLOWED_ROOT = 'plugins/lost_void_film'
@@ -51,13 +52,16 @@ class Rejected(Exception):
 
 
 def _norm(path: str) -> str:
-    """统一成相对仓库根、正斜杠的形式"""
+    """统一成相对仓库根、正斜杠的形式，并拒绝父目录跳转。"""
     p = path.replace('\\', '/')
     low = p.lower()
     marker = 'zzz-od/'
     if marker in low:
         p = p[low.rindex(marker) + len(marker):]
-    return p.lstrip('./')
+    parts = PurePosixPath(p.lstrip('/')).parts
+    if '..' in parts:
+        raise Rejected(f'路径包含父目录跳转（..）—— {path}')
+    return '/'.join(part for part in parts if part != '.')
 
 
 def check_write(path: str, content: str | None = None, *, exists: bool | None = None) -> None:
@@ -148,6 +152,9 @@ if __name__ == '__main__':
     assert 'ZZZ-autorun/' in blocked('ZZZ-autorun/loop/guard.py')
     # 范围外
     assert '仅限' in blocked('plugins/unattended_guardian/guardian_loop.py')
+    # 父目录跳转不得绕出允许目录
+    assert '..' in blocked('plugins/lost_void_film/../../src/zzz_od/evil.py')
+    assert '..' in blocked('plugins/lost_void_film/../unattended_guardian/evil.py')
     # 既有测试只读
     assert '只读' in blocked('plugins/lost_void_film/tests/test_pool_planner.py')
     # conftest / pytest.ini —— 前一版被打穿的两条路

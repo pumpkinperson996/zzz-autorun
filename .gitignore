@@ -1,0 +1,11 @@
+# Python caches
+__pycache__/
+*.py[cod]
+
+# Runtime output
+logs/*
+!logs/.gitkeep
+
+# Local environments and secrets
+.env
+.venv/
